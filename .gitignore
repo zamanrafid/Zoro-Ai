@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+dist/
+
+# Generated media + local database (never commit user content)
+data/
+!.gitkeep
+
+# Secrets (placeholders live in .env.example)
+.env
+.env.local
+.env*.local
+
+# Logs + caches
+*.log
+.tsbuildinfo
+tsconfig.tsbuildinfo
+.vscode/
+.DS_Store
+Thumbs.db

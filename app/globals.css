@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+body { background: #0B1120; color: #F8FAFC; }
+.glass { background: rgba(17,24,39,.72); backdrop-filter: blur(14px); border: 1px solid rgba(148,163,184,.14); }
+.grad-text { background: linear-gradient(90deg,#3B82F6,#8B5CF6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.grad-btn { background: linear-gradient(90deg,#3B82F6,#8B5CF6); }
+.card { @apply glass rounded-2xl p-5; }
+.input { @apply w-full rounded-xl bg-[#0B1120] border border-slate-700/60 px-4 py-3 text-base sm:text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500; }
+.label { @apply text-xs uppercase tracking-wider text-slate-400 mb-2 block; }
+.btn-primary { @apply grad-btn rounded-xl px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50; }
+.btn-ghost { @apply rounded-xl px-4 py-2.5 text-sm border border-slate-700 text-slate-200 hover:border-slate-500; }
+.badge { @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium border; }

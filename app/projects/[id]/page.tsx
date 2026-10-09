@@ -226,6 +226,115 @@ export default function Studio({ params }: { params: { id: string } }) {
   }
 
   const [voice, setVoice] = useState("nova");
+  const [autoLog, setAutoLog] = useState<string[]>([]);
+
+  /** Wait for one job to finish (throws on failure/timeout). Resume-safe: rerun continues. */
+  async function pollJobToEnd(jobId: string, timeoutMs: number): Promise<GenerationJob> {
+    const start = Date.now();
+    for (;;) {
+      const r = await fetch(`/api/jobs/${jobId}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error((d.error as string) ?? "Job check failed.");
+      const job = d.job as GenerationJob;
+      setDetail((p) => ({ ...p, [job.id]: job }));
+      if (job.status === "succeeded") return job;
+      if (job.status === "failed" || job.status === "cancelled") {
+        throw new Error(job.error ?? `Job ${job.status}.`);
+      }
+      if (Date.now() - start > timeoutMs) {
+        throw new Error("Onnekkhon lagche — page khola rakhen, abar Auto Movie chapun (jekhane thamse sekhan theke cholbe).");
+      }
+      await new Promise((res) => setTimeout(res, 4000));
+    }
+  }
+
+  /** One-click full movie: storyboard → stills → clips → voiceover → MP4. Skips finished steps. */
+  async function autoMake() {
+    if (!project) return;
+    if (project.providerId !== "slideshow" && project.providerId !== "mock") {
+      if (!confirm("Ei project paid provider-e ache — clip-e taka katbe. Chaliye jaben? (Free chaile notun project Free Movie Mode-e banan.)")) return;
+    }
+    setBusy("auto"); setError(""); setNotice(""); setAutoLog([]);
+    const log = (m: string) => setAutoLog((prev) => [...prev.slice(-9), m]);
+    try {
+      let proj = project;
+      const refresh = async (): Promise<Project> => {
+        const r = await fetch(`/api/projects/${id}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error((d.error as string) ?? "Reload failed.");
+        proj = d.project as Project;
+        setProject(proj);
+        setScript(proj.narrationScript ?? "");
+        return proj;
+      };
+      // 1. Storyboard
+      if (!proj.scenes.length) {
+        log("Step 1/5: golpo sajacchi (storyboard)…");
+        const { ok, status, data } = await fetchJson(`/api/projects/${id}/plan`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, negativePrompt: negative })
+        }, 120000);
+        if (!ok) throw new Error(apiError(status, data, "Storyboard failed."));
+        proj = await refresh();
+        log(`Storyboard ready: ${proj.scenes.length} scene.`);
+      } else log("Step 1/5: storyboard age thekei ready.");
+      // 2. Stills
+      for (const sid of proj.sceneOrder) {
+        const sc = proj.scenes.find((s) => s.id === sid)!;
+        if (sc.stillPath) { log(`Scene ${sc.index + 1}: still ache, skip.`); continue; }
+        log(`Step 2/5: scene ${sc.index + 1} chobi banacchi (free, ektu time lagbe)…`);
+        const { ok, status, data } = await fetchJson(`/api/projects/${id}/generate`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId: sid, kind: "still" })
+        }, 60000);
+        if (!ok || !data.job) throw new Error(apiError(status, data, "Still request failed."));
+        await pollJobToEnd((data.job as GenerationJob).id, 480000);
+        proj = await refresh();
+        log(`Scene ${sc.index + 1}: chobi ready.`);
+      }
+      // 3. Clips
+      for (const sid of proj.sceneOrder) {
+        const sc = proj.scenes.find((s) => s.id === sid)!;
+        const done = (proj.jobs ?? []).some((j) => j.sceneId === sid && j.status === "succeeded" && j.clipPath);
+        if (done) { log(`Scene ${sc.index + 1}: clip ache, skip.`); continue; }
+        log(`Step 3/5: scene ${sc.index + 1} video banacchi…`);
+        const { ok, status, data } = await fetchJson(`/api/projects/${id}/generate`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId: sid, kind: "video" })
+        }, 60000);
+        if (!ok || !data.job) throw new Error(apiError(status, data, "Clip request failed."));
+        await pollJobToEnd((data.job as GenerationJob).id, 600000);
+        proj = await refresh();
+        log(`Scene ${sc.index + 1}: video ready.`);
+      }
+      // 4. Voice
+      if (!proj.narrationAudioPath) {
+        log("Step 4/5: voice banacchi (free)…");
+        const { ok, status, data } = await fetchJson(`/api/projects/${id}/narration`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tts: true, voice })
+        }, 600000);
+        if (!ok) throw new Error(apiError(status, data, "Voiceover failed."));
+        proj = await refresh();
+        log("Voice ready.");
+      } else log("Step 4/5: voice age thekei ache.");
+      // 5. Assemble
+      log("Step 5/5: final MP4 jora lagacchi…");
+      const { ok, status, data } = await fetchJson(`/api/projects/${id}/assemble`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ burnCaptions: proj.burnCaptions, narrationVolume: proj.narrationVolume, musicVolume: proj.musicVolume })
+      }, 600000);
+      if (!ok) throw new Error(apiError(status, data, "Assembly failed."));
+      proj = await refresh();
+      log("Hoise! 🎬 Niche video dekhun + Download korun.");
+      setNotice("Auto Movie complete — watermark-free MP4 ready. Character/caption bodlate chaile bodle abar Render chaplei hobe.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Auto Movie failed.");
+      log("Thamse: " + (e instanceof Error ? e.message : "error"));
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function freeVoiceover() {
     setBusy("tts"); setError(""); setNotice("");
@@ -484,6 +593,22 @@ export default function Studio({ params }: { params: { id: string } }) {
       </section>
 
       {/* 5. Export */}
+      <section className="card mt-5 border-blue-500/30">
+        <h2 className="text-lg font-bold">★ Auto Movie — ektai button-e full video</h2>
+        <p className="mt-1 text-xs text-muted">
+          Storyboard → chobi → video clip → voice → final MP4 — shob nije nije hobe.
+          Jeta hoye geche seta skip korbe, majhkhane thamle abar chaple sekhan thekei cholbe.
+        </p>
+        <button className="btn-primary mt-3 w-full sm:w-auto" disabled={busy === "auto"} onClick={autoMake}>
+          {busy === "auto" ? "Movie banacchi… page bondho korben na" : "✨ Auto Movie banan"}
+        </button>
+        {autoLog.length > 0 && (
+          <ul className="mt-3 space-y-1 rounded-xl bg-black/30 p-3 text-xs text-slate-300">
+            {autoLog.map((l, i) => <li key={i}>• {l}</li>)}
+          </ul>
+        )}
+      </section>
+
       <section className="card mt-5">
         <h2 className="text-lg font-bold">5 · Assemble & export</h2>
         <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getProject, saveProject, deleteProjectFiles, newId } from "@/lib/store";
-import { MAX_PROMPT } from "@/lib/validate";
+import { MAX_PROMPT, MAX_DURATION, MIN_DURATION } from "@/lib/validate";
 import { z } from "zod";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -17,7 +17,7 @@ const patchSchema = z.object({
   providerId: z.string().min(1).optional(),
   settings: z
     .object({
-      durationSec: z.number().min(4).max(120).optional(),
+      durationSec: z.number().min(MIN_DURATION).max(MAX_DURATION).optional(),
       aspectRatio: z.enum(["9:16", "16:9", "1:1"]).optional(),
       style: z.enum(["realistic", "cinematic-documentary", "historical", "dark-mystery", "fantasy", "animation", "custom"]).optional(),
       customStyle: z.string().max(200).optional(),

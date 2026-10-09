@@ -27,6 +27,23 @@ describe("validation + providers honesty", () => {
     expect(r.success).toBe(true);
   });
 
+  it("accepts 50k prompts and 30-min videos", () => {
+    const r = createProjectSchema.safeParse({
+      name: "long epic",
+      prompt: "Epic tale. ".repeat(4000).slice(0, 45000),
+      settings: { durationSec: 1800, aspectRatio: "16:9", style: "historical", motionIntensity: "medium" },
+      providerId: "slideshow"
+    });
+    expect(r.success).toBe(true);
+    const bad = createProjectSchema.safeParse({
+      name: "x",
+      prompt: "A detective in old Dhaka uncovers a mystery.",
+      settings: { durationSec: 1801, aspectRatio: "16:9", style: "fantasy", motionIntensity: "low" },
+      providerId: "slideshow"
+    });
+    expect(bad.success).toBe(false);
+  });
+
   it("mock provider is configured and free; paid providers flag missing keys", () => {
     const ps = listProviders();
     const mock = ps.find((p) => p.id === "mock")!;

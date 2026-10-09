@@ -598,7 +598,10 @@ export default function Studio({ params }: { params: { id: string } }) {
           )}
         </div>
         {project.narrationAudioPath && <audio controls src={`/api/media/${project.narrationAudioPath}`} className="mt-3 w-full max-w-xl" />}
-        <p className="mt-2 text-xs text-muted">Free AI voiceover uses Pollinations TTS (no key, ≈1 request / 15s). Use only licensed or your own music.</p>
+        <p className="mt-2 text-xs text-muted">
+          Free AI voiceover uses Pollinations TTS (no key, ≈1 request / 15s). Use only licensed or your own music.
+          {project.scenes.length > 12 && ` Ei project-e ${project.scenes.length} scene — voice-e ~${Math.round(project.scenes.length * 0.35)} min lagte pare; page khola rakhen.`}
+        </p>
       </section>
 
       {/* 5. Export */}

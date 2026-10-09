@@ -188,7 +188,7 @@ export function planStoryboard(input: PlanInput): Storyboard {
   const { prompt, negativePrompt, settings } = input;
   const clean = prompt.trim();
   if (clean.length < 10) throw new Error("Prompt is too short. Describe your story in at least a few words.");
-  if (clean.length > 12000) throw new Error("Prompt is too long (max 12000 characters). Shorten it a little.");
+  if (clean.length > 50000) throw new Error("Prompt is too long (max 50000 characters). Shorten it a little.");
 
   const maxClip = Math.max(2, Math.min(10, input.providerMaxClipSec ?? 5));
   const total = Math.max(4, Math.min(120, Math.round(settings.durationSec)));
@@ -340,7 +340,9 @@ const PLANNER_SYSTEM =
   "You are ZORO AI's storyboard planner. Return strict JSON with keys: title, summary, narrationScript, characters (array of {name, role, age, fixedDescription}), scenes (array of {title, durationSec, visualPrompt, camera, lighting, transitionIn, transitionOut, narrationSegment, caption, sound}). Keep continuity across scenes.";
 
 function plannerUserMessage(input: PlanInput): string {
-  return `Prompt: ${input.prompt}\nStyle: ${input.settings.style}\nAspect: ${input.settings.aspectRatio}\nTotal seconds: ${input.settings.durationSec}\nMax clip seconds: ${input.providerMaxClipSec ?? 5}\nNegative: ${input.negativePrompt ?? ""}`;
+  // LLM planners get a trimmed prompt (context limits); the offline planner uses the full text.
+  const p = input.prompt.length > 8000 ? input.prompt.slice(0, 8000) + "\n[truncated for planning]" : input.prompt;
+  return `Prompt: ${p}\nStyle: ${input.settings.style}\nAspect: ${input.settings.aspectRatio}\nTotal seconds: ${input.settings.durationSec}\nMax clip seconds: ${input.providerMaxClipSec ?? 5}\nNegative: ${input.negativePrompt ?? ""}`;
 }
 
 /**

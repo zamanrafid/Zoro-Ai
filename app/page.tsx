@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ZoroLogo, StatusBadge, Empty } from "@/components/ui";
 import { fetchJson, apiError } from "@/lib/client";
-import { MAX_PROMPT } from "@/lib/validate";
+import { MAX_PROMPT, MAX_DURATION, MIN_DURATION } from "@/lib/validate";
 import type { ProviderInfo } from "@/lib/types";
 
 interface SlimProject {
@@ -72,8 +72,8 @@ export default function Dashboard() {
       setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Choto kore abar chesta korun (mul golpo ta rekhe extra ongsho katun).`);
       return;
     }
-    // Never send a bad duration: empty/garbage → 20, out-of-range → clamp 4–120.
-    const safeDuration = Math.min(120, Math.max(4, Math.round(Number(durationSec) || 20)));
+    // Never send a bad duration: empty/garbage → 20, out-of-range → clamp.
+    const safeDuration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, Math.round(Number(durationSec) || 20)));
     setDurationSec(safeDuration);
     setCreating(true);
     setError("");
@@ -164,8 +164,11 @@ export default function Dashboard() {
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="dur">Duration (sec)</label>
-            <input id="dur" type="number" min={4} max={120} className="input" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value))} />
+            <label className="label" htmlFor="dur">Duration (sec, max 1800 = 30 min)</label>
+            <input id="dur" type="number" min={MIN_DURATION} max={MAX_DURATION} className="input" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value))} />
+            <p className="mt-1 text-[11px] text-muted">
+              ≈ {Math.max(1, Math.round((Number(durationSec) || 20) / 5))} scenes · free stills ~{Math.max(1, Math.round(Math.max(1, Math.round((Number(durationSec) || 20) / 5)) * 0.7))} min (page khola rakhen, majhe thamle resume hobe)
+            </p>
           </div>
           <div>
             <label className="label" htmlFor="ar">Aspect ratio</label>

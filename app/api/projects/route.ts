@@ -31,7 +31,17 @@ export async function POST(req: Request) {
   }
   const parsed = createProjectSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid project data.", details: parsed.error.flatten() }, { status: 400 });
+    // Tell the user EXACTLY which field is wrong instead of a blank 400.
+    const flat = parsed.error.flatten();
+    const bits: string[] = [...flat.formErrors];
+    for (const [k, v] of Object.entries(flat.fieldErrors)) {
+      const msgs = v as unknown as string[];
+      if (Array.isArray(msgs) && msgs.length) bits.push(`${k}: ${msgs[0]}`);
+    }
+    return NextResponse.json(
+      { error: `Invalid project data${bits.length ? ` — ${bits.slice(0, 2).join("; ")}` : "."} Fix it and retry.`, details: flat },
+      { status: 400 }
+    );
   }
   const v = parsed.data;
   const now = new Date().toISOString();

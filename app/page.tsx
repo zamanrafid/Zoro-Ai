@@ -67,6 +67,9 @@ export default function Dashboard() {
       setError("Describe your video in at least 10 characters.");
       return;
     }
+    // Never send a bad duration: empty/garbage → 20, out-of-range → clamp 4–120.
+    const safeDuration = Math.min(120, Math.max(4, Math.round(Number(durationSec) || 20)));
+    setDurationSec(safeDuration);
     setCreating(true);
     setError("");
     try {
@@ -79,7 +82,7 @@ export default function Dashboard() {
             name: name.trim() || "Untitled video",
             prompt: prompt.trim(),
             providerId,
-            settings: { durationSec, aspectRatio, style, motionIntensity: "medium" }
+            settings: { durationSec: safeDuration, aspectRatio, style, motionIntensity: "medium" }
           })
         },
         30000

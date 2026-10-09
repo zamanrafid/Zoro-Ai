@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ZoroLogo, StatusBadge } from "@/components/ui";
+import { fetchJson, apiError } from "@/lib/client";
 import type { Project, GenerationJob } from "@/lib/types";
 
 function fileToDataUrl(f: File): Promise<string> {
@@ -96,15 +97,18 @@ export default function Studio({ params }: { params: { id: string } }) {
   async function plan() {
     setBusy("plan"); setError(""); setNotice("");
     try {
-      const r = await fetch(`/api/projects/${id}/plan`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, negativePrompt: negative })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Planning failed.");
-      setProject(d.project);
-      setScript(d.project.narrationScript ?? "");
-      setNotice(`${d.note ?? "Storyboard ready."} Review scenes and approve characters before generating.`);
+      const { ok, status, data } = await fetchJson(
+        `/api/projects/${id}/plan`,
+        {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, negativePrompt: negative })
+        },
+        120000
+      );
+      if (!ok || !data.project) throw new Error(apiError(status, data, "Planning failed."));
+      setProject(data.project as Project);
+      setScript(((data.project as Project).narrationScript ?? ""));
+      setNotice(`${(data.note as string) ?? "Storyboard ready."} Review scenes and approve characters before generating.`);
     } catch (e) { setError(e instanceof Error ? e.message : "Planning failed."); }
     finally { setBusy(""); }
   }
@@ -112,15 +116,19 @@ export default function Studio({ params }: { params: { id: string } }) {
   async function generate(sceneId: string, kind: "video" | "still" = "video") {
     setBusy(`gen:${sceneId}`); setError("");
     try {
-      const r = await fetch(`/api/projects/${id}/generate`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sceneId, kind })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Generation request failed.");
-      setDetail((p) => ({ ...p, [d.job.id]: d.job }));
+      const { ok, status, data } = await fetchJson(
+        `/api/projects/${id}/generate`,
+        {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId, kind })
+        },
+        60000
+      );
+      if (!ok || !data.job) throw new Error(apiError(status, data, "Generation request failed."));
+      const job = data.job as GenerationJob;
+      setDetail((p) => ({ ...p, [job.id]: job }));
       load();
-      if (d.job.status === "failed") setError(d.job.error ?? "Generation failed.");
+      if (job.status === "failed") setError(job.error ?? "Generation failed.");
     } catch (e) { setError(e instanceof Error ? e.message : "Generation failed."); }
     finally { setBusy(""); }
   }
@@ -132,13 +140,17 @@ export default function Studio({ params }: { params: { id: string } }) {
       for (const sid of project.sceneOrder) {
         const scene = project.scenes.find((s) => s.id === sid);
         if (scene?.stillPath) continue;
-        const r = await fetch(`/api/projects/${id}/generate`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sceneId: sid, kind: "still" })
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error ?? "Still request failed.");
-        setDetail((p) => ({ ...p, [d.job.id]: d.job }));
+        const { ok, status, data } = await fetchJson(
+          `/api/projects/${id}/generate`,
+          {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sceneId: sid, kind: "still" })
+          },
+          60000
+        );
+        if (!ok || !data.job) throw new Error(apiError(status, data, "Still request failed."));
+        const job = data.job as GenerationJob;
+        setDetail((p) => ({ ...p, [job.id]: job }));
       }
       setNotice("Free stills queued for all scenes. They arrive one by one (free tier ≈1 request / 15s) — leave this page open.");
       load();
@@ -148,13 +160,20 @@ export default function Studio({ params }: { params: { id: string } }) {
 
   async function patchScene(sceneId: string, data: Record<string, unknown>) {
     setError("");
-    const r = await fetch(`/api/projects/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scene: { id: sceneId, data } })
-    });
-    const d = await r.json();
-    if (!r.ok) { setError(d.error ?? "Scene update failed."); return; }
-    setProject(d.project);
+    try {
+      const { ok, status, data: d } = await fetchJson(
+        `/api/projects/${id}`,
+        {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene: { id: sceneId, data } })
+        },
+        30000
+      );
+      if (!ok || !d.project) { setError(apiError(status, d, "Scene update failed.")); return; }
+      setProject(d.project as Project);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Scene update failed.");
+    }
   }
 
   async function moveScene(sceneId: string, dir: -1 | 1) {
@@ -164,24 +183,35 @@ export default function Studio({ params }: { params: { id: string } }) {
     const j = i + dir;
     if (i < 0 || j < 0 || j >= order.length) return;
     [order[i], order[j]] = [order[j], order[i]];
-    const r = await fetch(`/api/projects/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sceneOrder: order })
-    });
-    const d = await r.json();
-    if (r.ok) setProject(d.project); else setError(d.error ?? "Reorder failed.");
+    try {
+      const { ok, status, data } = await fetchJson(
+        `/api/projects/${id}`,
+        {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneOrder: order })
+        },
+        30000
+      );
+      if (ok && data.project) setProject(data.project as Project);
+      else setError(apiError(status, data, "Reorder failed."));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reorder failed.");
+    }
   }
 
   async function assemble() {
     setBusy("assemble"); setError(""); setNotice("");
     try {
-      const r = await fetch(`/api/projects/${id}/assemble`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ burnCaptions: project?.burnCaptions, narrationVolume: project?.narrationVolume, musicVolume: project?.musicVolume })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Assembly failed.");
-      setProject(d.project);
+      const { ok, status, data } = await fetchJson(
+        `/api/projects/${id}/assemble`,
+        {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ burnCaptions: project?.burnCaptions, narrationVolume: project?.narrationVolume, musicVolume: project?.musicVolume })
+        },
+        600000
+      );
+      if (!ok || !data.project) throw new Error(apiError(status, data, "Assembly failed."));
+      setProject(data.project as Project);
       setNotice("Export ready — watermark-free MP4 (ZORO AI adds no branding overlay).");
     } catch (e) { setError(e instanceof Error ? e.message : "Assembly failed."); }
     finally { setBusy(""); }
@@ -200,14 +230,17 @@ export default function Studio({ params }: { params: { id: string } }) {
   async function freeVoiceover() {
     setBusy("tts"); setError(""); setNotice("");
     try {
-      const r = await fetch(`/api/projects/${id}/narration`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tts: true, voice })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Voiceover failed.");
-      setProject(d.project);
-      setNotice(d.note ?? "Free voiceover ready.");
+      const { ok, status, data } = await fetchJson(
+        `/api/projects/${id}/narration`,
+        {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tts: true, voice })
+        },
+        600000
+      );
+      if (!ok || !data.project) throw new Error(apiError(status, data, "Voiceover failed."));
+      setProject(data.project as Project);
+      setNotice((data.note as string) ?? "Free voiceover ready.");
     } catch (e) { setError(e instanceof Error ? e.message : "Voiceover failed."); }
     finally { setBusy(""); }
   }
@@ -295,8 +328,10 @@ export default function Studio({ params }: { params: { id: string } }) {
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <button className="btn-ghost" onClick={async () => {
-                  const r = await fetch(`/api/projects/${id}/characters`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approve", characterId: c.id, approved: !c.approved }) });
-                  const d = await r.json(); if (r.ok) setProject(d.project); else setError(d.error);
+                  try {
+                    const { ok, status, data } = await fetchJson(`/api/projects/${id}/characters`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approve", characterId: c.id, approved: !c.approved }) }, 30000);
+                    if (ok && data.project) setProject(data.project as Project); else setError(apiError(status, data, "Approve failed."));
+                  } catch (e) { setError(e instanceof Error ? e.message : "Approve failed."); }
                 }}>{c.approved ? "Unapprove" : "Approve"}</button>
                 <button className="btn-ghost" onClick={async () => {
                   const fixed = promptInput("Edit fixed visual description:", c.fixedDescription);

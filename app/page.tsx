@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ZoroLogo, StatusBadge, Empty } from "@/components/ui";
+import { fetchJson, apiError } from "@/lib/client";
 import type { ProviderInfo } from "@/lib/types";
 
 interface SlimProject {
@@ -69,19 +70,22 @@ export default function Dashboard() {
     setCreating(true);
     setError("");
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim() || "Untitled video",
-          prompt: prompt.trim(),
-          providerId,
-          settings: { durationSec, aspectRatio, style, motionIntensity: "medium" }
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not create project.");
-      window.location.href = `/projects/${data.project.id}`;
+      const { ok, status, data } = await fetchJson(
+        "/api/projects",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim() || "Untitled video",
+            prompt: prompt.trim(),
+            providerId,
+            settings: { durationSec, aspectRatio, style, motionIntensity: "medium" }
+          })
+        },
+        30000
+      );
+      if (!ok || !data.project) throw new Error(apiError(status, data, "Could not create project."));
+      window.location.href = `/projects/${(data.project as { id: string }).id}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create project.");
       setCreating(false);

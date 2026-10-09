@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ZoroLogo, StatusBadge, Empty } from "@/components/ui";
 import { fetchJson, apiError } from "@/lib/client";
+import { MAX_PROMPT } from "@/lib/validate";
 import type { ProviderInfo } from "@/lib/types";
 
 interface SlimProject {
@@ -65,6 +66,10 @@ export default function Dashboard() {
   async function createProject() {
     if (prompt.trim().length < 10) {
       setError("Describe your video in at least 10 characters.");
+      return;
+    }
+    if (prompt.length > MAX_PROMPT) {
+      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Choto kore abar chesta korun (mul golpo ta rekhe extra ongsho katun).`);
       return;
     }
     // Never send a bad duration: empty/garbage → 20, out-of-range → clamp 4–120.
@@ -136,6 +141,9 @@ export default function Dashboard() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
+        <p className={`mt-1 text-right text-[11px] ${prompt.length > MAX_PROMPT ? "text-red-300" : "text-muted"}`}>
+          {prompt.length} / {MAX_PROMPT}
+        </p>
         <div className="mt-2 flex flex-wrap gap-2">
           {EXAMPLES.map((ex) => (
             <button key={ex} className="btn-ghost text-xs" onClick={() => setPrompt(ex)}>Use example</button>

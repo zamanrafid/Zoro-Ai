@@ -188,7 +188,7 @@ export function planStoryboard(input: PlanInput): Storyboard {
   const { prompt, negativePrompt, settings } = input;
   const clean = prompt.trim();
   if (clean.length < 10) throw new Error("Prompt is too short. Describe your story in at least a few words.");
-  if (clean.length > 4000) throw new Error("Prompt is too long (max 4000 characters).");
+  if (clean.length > 12000) throw new Error("Prompt is too long (max 12000 characters). Shorten it a little.");
 
   const maxClip = Math.max(2, Math.min(10, input.providerMaxClipSec ?? 5));
   const total = Math.max(4, Math.min(120, Math.round(settings.durationSec)));

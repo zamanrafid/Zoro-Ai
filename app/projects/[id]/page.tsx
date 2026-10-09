@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ZoroLogo, StatusBadge } from "@/components/ui";
 import { fetchJson, apiError } from "@/lib/client";
+import { MAX_PROMPT } from "@/lib/validate";
 import type { Project, GenerationJob } from "@/lib/types";
 
 function fileToDataUrl(f: File): Promise<string> {
@@ -96,6 +97,11 @@ export default function Studio({ params }: { params: { id: string } }) {
 
   async function plan() {
     setBusy("plan"); setError(""); setNotice("");
+    if (prompt.length > MAX_PROMPT) {
+      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Choto kore abar chesta korun.`);
+      setBusy("");
+      return;
+    }
     try {
       const { ok, status, data } = await fetchJson(
         `/api/projects/${id}/plan`,
@@ -392,6 +398,9 @@ export default function Studio({ params }: { params: { id: string } }) {
         <div className="mt-3">
           <label className="label" htmlFor="sprompt">Story prompt</label>
           <textarea id="sprompt" className="input min-h-[100px]" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+          <p className={`mt-1 text-right text-[11px] ${prompt.length > MAX_PROMPT ? "text-red-300" : "text-muted"}`}>
+            {prompt.length} / {MAX_PROMPT}
+          </p>
         </div>
         <div className="mt-3">
           <label className="label" htmlFor="sneg">Negative prompt (optional)</label>

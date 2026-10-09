@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getProject, saveProject, deleteProjectFiles, newId } from "@/lib/store";
+import { MAX_PROMPT } from "@/lib/validate";
 import { z } from "zod";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -12,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  prompt: z.string().min(10).max(4000).optional(),
+  prompt: z.string().min(10).max(MAX_PROMPT).optional(),
   providerId: z.string().min(1).optional(),
   settings: z
     .object({

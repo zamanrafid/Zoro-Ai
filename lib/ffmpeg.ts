@@ -65,7 +65,10 @@ export async function assembleProject(
   orderedSceneIds.forEach((sid, i) => {
     const scene = project.scenes.find((s) => s.id === sid);
     const jobs = (project.jobs ?? []).filter((j) => j.sceneId === sid && j.status === "succeeded" && j.clipPath);
-    const latest = jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+    jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // Honor the user's picked take; fall back to the latest successful clip.
+    const picked = scene?.selectedJobId ? jobs.find((j) => j.id === scene.selectedJobId) : undefined;
+    const latest = picked ?? jobs[0];
     if (latest?.clipPath) {
       clips.push(path.join(dataDir(), latest.clipPath));
       return;

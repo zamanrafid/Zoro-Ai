@@ -63,6 +63,8 @@ export interface ScenePlan {
   negativePrompt?: string;
   /** Free AI still image for this scene (Pollinations). Used by Free Movie Mode. */
   stillPath?: string;
+  /** Chosen take for the final export (job id). Empty = latest successful clip. */
+  selectedJobId?: string;
 }
 
 export type JobStatus =

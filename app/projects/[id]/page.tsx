@@ -538,6 +538,41 @@ export default function Studio({ params }: { params: { id: string } }) {
                 )}
                 {stillJob && stillJob.status !== "succeeded" && <p className="mt-1 text-xs text-muted">Still: {stillJob.status}{stillJob.error ? ` — ${stillJob.error}` : ""}</p>}
                 {latest?.error && latest.providerId !== "free-still" && <p className="mt-2 break-words text-xs text-red-300">{latest.error}</p>}
+                {(() => {
+                  const takes = jobs.filter((j) => j.status === "succeeded" && j.clipPath).reverse();
+                  if (takes.length === 0) return null;
+                  return (
+                    <div className="mt-3 rounded-xl border border-slate-700 p-3">
+                      <p className="text-xs font-semibold">
+                        Takes — shob dekhe best ta final-e din ({takes.length} ta option{takes.length > 1 ? "s" : ""})
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {takes.map((t, ti) => {
+                          const isActive = s.selectedJobId ? s.selectedJobId === t.id : ti === 0;
+                          return (
+                            <div key={t.id} className={`rounded-lg border p-2 ${isActive ? "border-emerald-500/60" : "border-slate-700"}`}>
+                              <p className="mb-1 text-[11px] font-semibold text-slate-300">
+                                Option {ti + 1}{isActive ? " ✓ (final-e jabe)" : ""}
+                              </p>
+                              <video controls preload="none" src={`/api/media/${t.clipPath}`} className="w-full rounded-lg" />
+                              <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
+                                {!isActive && (
+                                  <button className="btn-ghost" onClick={() => patchScene(s.id, { selectedJobId: t.id })}>
+                                    Best — final-e eta
+                                  </button>
+                                )}
+                                <a className="btn-ghost" href={`/api/media/${t.clipPath}`} download={`scene${s.index + 1}-option${ti + 1}.mp4`}>
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted">Aro option chaile “Regenerate” chapun — notun take ashbe, ager gulo thakbe.</p>
+                    </div>
+                  );
+                })()}
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   <button className="btn-ghost" disabled={busy === `gen:${s.id}`} onClick={() => generate(s.id, "still")}>
                     Free still

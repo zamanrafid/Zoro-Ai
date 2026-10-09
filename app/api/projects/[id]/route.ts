@@ -7,7 +7,16 @@ import { z } from "zod";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const p = await getProject(params.id);
-  if (!p) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  if (!p) {
+    return NextResponse.json(
+      {
+        error:
+          "Project not found. Hoy delete hoye geche, noy host kora demo link-e storage reset hoyeche " +
+          "(Vercel-e prottek request-e file muche jete pare). Permanent project-er jonno PC-te (npm run dev / start-zoro.bat) chalan."
+      },
+      { status: 404 }
+    );
+  }
   return NextResponse.json({ project: p });
 }
 
@@ -94,12 +103,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (v.scene) {
     const sc = p.scenes.find((s) => s.id === v.scene!.id);
     if (!sc) return NextResponse.json({ error: "Scene not found." }, { status: 404 });
-    const allowed = ["title", "visualPrompt", "camera", "lighting", "narrationSegment", "caption", "durationSec", "characterIds", "sound", "transitionIn", "transitionOut"] as const;
+    const allowed = ["title", "visualPrompt", "camera", "lighting", "narrationSegment", "caption", "durationSec", "characterIds", "sound", "transitionIn", "transitionOut", "selectedJobId"] as const;
     for (const k of allowed) {
       const val = (v.scene.data as Record<string, unknown>)[k];
       if (val !== undefined) (sc as unknown as Record<string, unknown>)[k] = val;
     }
     if (typeof sc.durationSec === "number") sc.durationSec = Math.max(2, Math.min(10, Math.round(sc.durationSec)));
+    // selectedJobId must point at a REAL successful clip of this scene — never blind trust.
+    if (sc.selectedJobId) {
+      const pick = (p.jobs ?? []).find((j) => j.id === sc.selectedJobId);
+      if (!pick || pick.sceneId !== sc.id || pick.status !== "succeeded" || !pick.clipPath) {
+        sc.selectedJobId = undefined;
+        await saveProject(p);
+        return NextResponse.json({ error: "That take is not a finished clip of this scene — selection cleared.", project: p }, { status: 400 });
+      }
+    }
   }
   if (v.deleteSceneId) {
     p.scenes = p.scenes.filter((s) => s.id !== v.deleteSceneId);

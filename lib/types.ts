@@ -87,6 +87,8 @@ export interface GenerationJob {
   error?: string;
   logs: string[];
   seed?: number;
+  /** Consecutive retriable-error count (free-tier busy) before giving up. */
+  attempts?: number;
   createdAt: string;
   updatedAt: string;
 }

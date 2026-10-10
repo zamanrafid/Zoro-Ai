@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { dataDir, getProject, saveProject } from "./store";
 import { downloadUrlToMedia, getReplicatePrediction } from "./providers";
-import { fetchStill } from "./free";
+import { fetchStill, isRetriableFreeError } from "./free";
 import { renderStillClip } from "./ffmpeg";
 import type { AspectRatio, GenerationJob, Project, ScenePlan } from "./types";
 
@@ -81,12 +81,24 @@ export async function pollOneJob(projectId: string, jobId: string) {
         job.status = "processing";
         await materializeStill(p, scene, job);
         job.status = "succeeded";
+        job.attempts = 0;
         job.progress = 100;
         job.logs.push("Free AI still saved. It will be reused for this scene's movie clip.");
       } catch (e) {
-        job.status = "failed";
-        job.error = e instanceof Error ? e.message : "Still generation failed.";
-        job.logs.push(job.error);
+        const msg = e instanceof Error ? e.message : "Still generation failed.";
+        const n = (job.attempts ?? 0) + 1;
+        // Free tier is flaky (402/429): retry automatically across polls for a
+        // few minutes instead of failing instantly. Client keeps polling.
+        if (isRetriableFreeError(msg) && n <= 60) {
+          job.attempts = n;
+          job.status = "processing";
+          job.progress = 5;
+          if (n % 10 === 1) job.logs.push(`Free service busy (retry ${n}) — waiting and retrying automatically…`);
+        } else {
+          job.status = "failed";
+          job.error = msg;
+          job.logs.push(msg);
+        }
       }
     }
     await saveProject(p);
@@ -111,9 +123,21 @@ export async function pollOneJob(projectId: string, jobId: string) {
           job.status = "processing";
           job.progress = 20;
           job.logs.push("Fetching free AI still for this scene…");
-          await materializeStill(p, scene, job);
-          job.logs.push("Still ready — rendering motion next poll.");
-          job.progress = 45;
+          try {
+            await materializeStill(p, scene, job);
+            job.attempts = 0;
+            job.logs.push("Still ready — rendering motion next poll.");
+            job.progress = 45;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "Still fetch failed.";
+            const n = (job.attempts ?? 0) + 1;
+            if (isRetriableFreeError(msg) && n <= 60) {
+              job.attempts = n;
+              if (n % 10 === 1) job.logs.push(`Free service busy (retry ${n}) — waiting and retrying automatically…`);
+            } else {
+              throw e;
+            }
+          }
         }
       } else {
         job.status = "processing";

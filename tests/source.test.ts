@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isYouTubeUrl, planShorts } from "../lib/source";
+import { isRetriableFreeError } from "../lib/free";
 import { createProjectSchema } from "../lib/validate";
 
 describe("source import guards", () => {
@@ -22,6 +23,15 @@ describe("source import guards", () => {
     const tiny = planShorts(100, 999);
     expect(tiny[0].len).toBe(60);
     expect(planShorts(0, 30)).toEqual([]);
+  });
+
+  it("retries flaky free-tier errors instead of failing instantly", () => {
+    expect(isRetriableFreeError("Free service returned 402.")).toBe(true);
+    expect(isRetriableFreeError("rate-limited, wait and retry")).toBe(true);
+    expect(isRetriableFreeError("Free service timed out.")).toBe(true);
+    expect(isRetriableFreeError("fetch failed")).toBe(true);
+    expect(isRetriableFreeError("Scene for this job no longer exists.")).toBe(false);
+    expect(isRetriableFreeError("Invalid project data.")).toBe(false);
   });
 
   it("accepts practically unlimited text (200k)", () => {

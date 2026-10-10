@@ -98,6 +98,11 @@ export async function fetchTtsMp3(text: string, voice: string): Promise<Buffer> 
   return fetchBuffer(ttsUrl(text, voice), 120000);
 }
 
+/** Free-tier busy signals worth retrying automatically instead of failing instantly. */
+export function isRetriableFreeError(msg: string): boolean {
+  return /(402|429|rate-limited|timed out|empty response|fetch failed|econn|socket hang up|eai_again|temporarily)/i.test(msg);
+}
+
 /** Free LLM call for storyboard planning. Returns parsed JSON or throws (caller falls back to offline). */
 export async function fetchFreePlannerJson(system: string, user: string): Promise<Record<string, unknown>> {
   const ctrl = new AbortController();

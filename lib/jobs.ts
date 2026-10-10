@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { dataDir, getProject, saveProject } from "./store";
-import { advanceMockJob, downloadUrlToMedia, getReplicatePrediction } from "./providers";
+import { downloadUrlToMedia, getReplicatePrediction } from "./providers";
 import { fetchStill } from "./free";
 import { renderStillClip } from "./ffmpeg";
 import type { AspectRatio, GenerationJob, Project, ScenePlan } from "./types";
@@ -57,7 +57,7 @@ export async function materializeStill(
   return { rel };
 }
 
-/** Advance exactly one job and persist. Handles free stills, slideshow clips, mock, replicate. */
+/** Advance exactly one job and persist. Handles free stills, slideshow clips, replicate. */
 export async function pollOneJob(projectId: string, jobId: string) {
   const p = await getProject(projectId);
   if (!p) return null;
@@ -138,17 +138,6 @@ export async function pollOneJob(projectId: string, jobId: string) {
       job.status = "failed";
       job.error = e instanceof Error ? e.message : "Free clip failed.";
       job.logs.push(job.error);
-    }
-    await saveProject(p);
-    return { project: p, job };
-  }
-
-  if (job.providerId === "mock") {
-    if (!scene) {
-      job.status = "failed";
-      job.error = "Scene for this job no longer exists (storyboard was replanned).";
-    } else {
-      await advanceMockJob(job, scene, p.settings.aspectRatio);
     }
     await saveProject(p);
     return { project: p, job };

@@ -14,7 +14,7 @@ export async function GET() {
     providerId: p.providerId,
     scenes: p.scenes?.length ?? 0,
     characters: p.characters?.length ?? 0,
-    jobs: (p.jobs ?? []).map((j) => ({ id: j.id, sceneId: j.sceneId, status: j.status, isMock: j.isMock })),
+    jobs: (p.jobs ?? []).map((j) => ({ id: j.id, sceneId: j.sceneId, status: j.status })),
     hasOutput: Boolean(p.output?.path),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt

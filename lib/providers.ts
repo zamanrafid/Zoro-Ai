@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { spawn } from "child_process";
-import type { AspectRatio, GenerationJob, ProviderInfo, ScenePlan } from "./types";
+import type { AspectRatio, ProviderInfo } from "./types";
 import { dataDir, jobsDir } from "./store";
 
 export const PROVIDER_META: Array<{
@@ -29,18 +29,6 @@ export const PROVIDER_META: Array<{
     resolutions: ["720x1280", "1280x720", "720x720"]
   },
   {
-    id: "mock",
-    label: "Mock Studio (free test renderer)",
-    kind: "mock",
-    requiresApiKey: false,
-    costNote: "Free. Clearly labeled TEST output — not AI generation. Used to verify the full workflow without spending money.",
-    supportsReferenceImages: false,
-    referenceNote: "Mock renderer does not do identity preservation. Approve character art here, then use a reference-capable model for real identity.",
-    maxClipSec: 5,
-    supportedAspects: ["9:16", "16:9", "1:1"],
-    resolutions: ["720x1280", "1280x720", "720x720"]
-  },
-  {
     id: "replicate",
     label: "Replicate (bring your own model)",
     kind: "replicate",
@@ -63,18 +51,6 @@ export const PROVIDER_META: Array<{
     maxClipSec: 5,
     supportedAspects: ["9:16", "16:9", "1:1"],
     resolutions: ["model-dependent"]
-  },
-  {
-    id: "local",
-    label: "Local GPU worker (integration point)",
-    kind: "local",
-    requiresApiKey: false,
-    costNote: "No per-generation fee, but needs a CUDA GPU with 12GB+ VRAM. This PC (i3, 8GB, no dedicated GPU) is NOT suitable for local video diffusion.",
-    supportsReferenceImages: false,
-    referenceNote: "Local worker not connected. Run the worker on suitable hardware and set LOCAL_WORKER_URL.",
-    maxClipSec: 5,
-    supportedAspects: ["9:16", "16:9", "1:1"],
-    resolutions: ["worker-dependent"]
   }
 ];
 
@@ -96,101 +72,12 @@ export function listProviders(): ProviderInfo[] {
         missing: ok ? undefined : "Set HF_TOKEN and HF_VIDEO_MODEL in .env.local. Verify model, limits and billing on huggingface.co before use."
       };
     }
-    if (m.id === "local") {
-      const ok = Boolean(process.env.LOCAL_WORKER_URL);
-      return {
-        ...m,
-        configured: ok,
-        missing: ok ? undefined : "No local worker connected. This is expected on low-end hardware — use Mock (free test) or configure Replicate / Hugging Face."
-      };
-    }
     return { ...m, configured: true };
   });
 }
 
 export function providerMaxClip(providerId: string): number {
   return PROVIDER_META.find((p) => p.id === providerId)?.maxClipSec ?? 5;
-}
-
-/** Advance a MOCK job based on elapsed time and materialize a test clip with FFmpeg if available. */
-export async function advanceMockJob(job: GenerationJob, scene: ScenePlan, aspect: AspectRatio): Promise<GenerationJob> {
-  const elapsed = Date.now() - new Date(job.createdAt).getTime();
-  job.logs = job.logs ?? [];
-  if (job.status === "queued" && elapsed > 1500) {
-    job.status = "processing";
-    job.progress = 25;
-    job.logs.push("Mock renderer picked up the job (TEST output, not AI).");
-  } else if (job.status === "processing") {
-    job.progress = Math.min(95, 25 + Math.floor(elapsed / 200));
-    if (elapsed > 9000) {
-      const made = await renderMockClip(job, scene, aspect);
-      if (made) {
-        job.status = "succeeded";
-        job.progress = 100;
-        job.clipPath = made.clipPath;
-        job.posterPath = made.posterPath;
-        job.logs.push("Mock test clip rendered with FFmpeg (clearly labeled test pattern).");
-      } else {
-        job.status = "failed";
-        job.error =
-          "FFmpeg was not found, so the mock test clip could not be rendered. Install FFmpeg, then retry. " +
-          "Your storyboard, characters and scene prompts are saved — nothing was lost.";
-        job.logs.push("FFmpeg missing — mock render aborted with a clear error (no fake success).");
-      }
-    }
-  }
-  job.updatedAt = new Date().toISOString();
-  return job;
-}
-
-function dimsFor(aspect: AspectRatio): string {
-  if (aspect === "9:16") return "720x1280";
-  if (aspect === "1:1") return "720x720";
-  return "1280x720";
-}
-
-async function renderMockClip(
-  job: GenerationJob,
-  scene: ScenePlan,
-  aspect: AspectRatio
-): Promise<{ clipPath: string; posterPath: string } | null> {
-  const ff = await checkFfmpeg();
-  if (!ff.ok) return null;
-  const dims = dimsFor(aspect);
-  const rel = `media/mock/${job.id}.mp4`.replace(/\\/g, "/");
-  const abs = path.join(dataDir(), rel);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  const text = `ZORO AI MOCK TEST - Scene ${scene.index + 1}`.replace(/[:']/g, "");
-  await new Promise<void>((resolve, reject) => {
-    const dur = Math.max(2, Math.min(10, scene.durationSec));
-    const args = [
-      "-y",
-      "-f", "lavfi", "-i", `testsrc2=size=${dims}:rate=30:duration=${dur}`,
-      "-vf", `drawtext=text='${text}':fontsize=28:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.6`,
-      "-pix_fmt", "yuv420p",
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      abs
-    ];
-    const child = spawn("ffmpeg", args, { stdio: "ignore" });
-    child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`))));
-  }).catch(() => null);
-  try {
-    await fs.stat(abs);
-  } catch {
-    return null;
-  }
-  // Poster: simple SVG referencing the clip (served as image).
-  const posterRel = `media/mock/${job.id}.svg`.replace(/\\/g, "/");
-  const posterAbs = path.join(dataDir(), posterRel);
-  const [w, h] = dims.split("x");
-  await fs.writeFile(
-    posterAbs,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B82F6"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs><rect width="100%" height="100%" fill="#0B1120"/><rect width="100%" height="100%" fill="url(#g)" opacity="0.25"/><text x="50%" y="48%" fill="#F8FAFC" font-size="34" text-anchor="middle" font-family="sans-serif">MOCK TEST — Scene ${scene.index + 1}</text><text x="50%" y="56%" fill="#94A3B8" font-size="18" text-anchor="middle" font-family="sans-serif">Not AI generation</text></svg>`,
-    "utf-8"
-  );
-  return { clipPath: rel, posterPath: posterRel };
 }
 
 /* ---------------- Real providers (verified endpoints, user-supplied keys) ---------------- */

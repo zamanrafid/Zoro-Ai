@@ -35,8 +35,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     logs: [],
     seed: body.seed ?? Math.floor(Math.random() * 100000),
     createdAt: now,
-    updatedAt: now,
-    isMock: p.providerId === "mock"
+    updatedAt: now
   };
 
   if (kind === "still") {
@@ -64,21 +63,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { status: 409 }
     );
   }
-  if (provider.kind === "local") {
-    return NextResponse.json(
-      { error: "No local worker connected. Use the Mock renderer for free testing, or configure Replicate / Hugging Face." },
-      { status: 409 }
-    );
-  }
-
-  if (provider.id === "mock") {
-    job.logs.push("TEST job: output will be a labeled test pattern, not AI video.");
-    p.jobs.push(job);
-    await saveProject(p);
-    await indexJob(p.id, job.id);
-    return NextResponse.json({ job }, { status: 201 });
-  }
-
   if (provider.id === "replicate") {
     try {
       const refUrls: string[] = [];

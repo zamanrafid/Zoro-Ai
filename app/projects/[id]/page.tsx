@@ -51,7 +51,7 @@ export default function Studio({ params }: { params: { id: string } }) {
 
   useEffect(() => { load(true); }, [load]);
 
-  // Poll active jobs for REAL status (mock advances server-side; replicate polls the provider).
+  // Poll active jobs for REAL status (free-still/slideshow advance server-side; replicate polls the provider).
   useEffect(() => {
     const active = (project?.jobs ?? []).some((j) => j.status === "queued" || j.status === "processing");
     if (!active) {
@@ -289,7 +289,7 @@ export default function Studio({ params }: { params: { id: string } }) {
   /** One-click full movie: storyboard → stills → clips → voiceover → MP4. Skips finished steps. */
   async function autoMake() {
     if (!project) return;
-    if (project.providerId !== "slideshow" && project.providerId !== "mock") {
+    if (project.providerId !== "slideshow") {
       if (!confirm("Ei project paid provider-e ache — clip-e taka katbe. Chaliye jaben? (Free chaile notun project Free Movie Mode-e banan.)")) return;
     }
     setBusy("auto"); setError(""); setNotice(""); setAutoLog([]);
@@ -526,7 +526,7 @@ export default function Studio({ params }: { params: { id: string } }) {
         <h2 className="text-lg font-bold">2 · Character Bible — approve before generating</h2>
         <p className="mt-1 text-xs text-muted">
           Approved reference images are reused in every scene with that character. Identity preservation depends on the model —
-          the Mock renderer does not preserve identity; reference-capable video models do their best but perfection is never promised.
+          reference-capable video models do their best but perfection is never promised.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {(project.characters ?? []).map((c) => (
@@ -600,8 +600,8 @@ export default function Studio({ params }: { params: { id: string } }) {
             const latest = jobs[jobs.length - 1];
             const stillJob = [...jobs].reverse().find((j) => j.providerId === "free-still");
             const chars = s.characterIds.map((cid) => project.characters.find((c) => c.id === cid)).filter(Boolean);
-            const clipLabel = project.providerId === "slideshow" ? "Generate free clip" : project.providerId === "mock" ? "Generate test clip" : "Generate clip (paid)";
-            const tag = latest?.providerId === "free-still" ? " (free still)" : latest?.providerId === "slideshow" ? " (free)" : latest?.isMock ? " (test)" : "";
+            const clipLabel = project.providerId === "slideshow" ? "Generate free clip" : "Generate clip (paid)";
+            const tag = latest?.providerId === "free-still" ? " (free still)" : latest?.providerId === "slideshow" ? " (free)" : "";
             return (
               <li key={s.id} className="rounded-xl border border-slate-700 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">

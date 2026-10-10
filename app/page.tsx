@@ -14,7 +14,7 @@ interface SlimProject {
   providerId: string;
   scenes: number;
   characters: number;
-  jobs: Array<{ id: string; sceneId: string; status: string; isMock?: boolean }>;
+  jobs: Array<{ id: string; sceneId: string; status: string }>;
   hasOutput: boolean;
   createdAt: string;
   updatedAt: string;
@@ -222,7 +222,7 @@ export default function Dashboard() {
                       {p.scenes} scenes · {p.characters} characters · provider: {p.providerId} · {p.hasOutput ? "exported" : "no export yet"}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {p.jobs.slice(0, 6).map((j) => <StatusBadge key={j.id} status={`${j.status}${j.isMock ? " (test)" : ""}`} />)}
+                      {p.jobs.slice(0, 6).map((j) => <StatusBadge key={j.id} status={j.status} />)}
                     </div>
                   </div>
                   <div className="flex gap-2">

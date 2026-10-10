@@ -89,7 +89,6 @@ export interface GenerationJob {
   seed?: number;
   createdAt: string;
   updatedAt: string;
-  isMock?: boolean;
 }
 
 export interface AssembleOutput {
@@ -132,7 +131,7 @@ export interface Project {
 export interface ProviderInfo {
   id: string;
   label: string;
-  kind: "mock" | "slideshow" | "replicate" | "huggingface" | "local";
+  kind: "slideshow" | "replicate" | "huggingface";
   configured: boolean;
   requiresApiKey: boolean;
   costNote: string;

@@ -35,13 +35,13 @@ for higher limits + watermark removal. Free-tier images may carry a watermark.
 - Character Library per project: manual add, **free** reference image via Pollinations
   (anonymous ~1 req/15s; free tier may watermark — disclosed in-app), upload own art,
   approve/unapprove, edit with explicit “apply to existing scenes” choice.
-- Provider-adapter architecture:
-  - `mock` — FREE test renderer, clearly labeled TEST patterns (needs FFmpeg to render).
+- Provider architecture (only what works):
+  - `slideshow` — **Free Movie Mode**: AI stills + motion, 100% free, no key.
   - `replicate` — REAL paid API (`POST https://api.replicate.com/v1/predictions`,
     Bearer `REPLICATE_API_TOKEN`; you set `REPLICATE_VIDEO_MODEL`). Paid per run.
   - `huggingface` — integration point (set `HF_TOKEN`/`HF_VIDEO_MODEL`; confirm the
     model’s router payload in HF docs before use — the app refuses to guess).
-  - `local` — integration point for a remote GPU worker (`LOCAL_WORKER_URL`).
+  - `import` — YouTube/upload Shorts cutting (free local tools).
 - Per-scene jobs with live polling, per-scene regenerate, reorder/duplicate/delete,
   resume-safe (approved characters + succeeded clips survive replans/reloads).
 - Narration: editable script, free on-device voice preview (Web Speech),
@@ -55,18 +55,16 @@ for higher limits + watermark removal. Free-tier images may carry a watermark.
 
 | Feature | Cost / requirement |
 |---|---|
-| Storyboard, characters, mock tests, SRT, UI | Free |
+| Storyboard, characters, stills, voice, SRT, UI | Free |
 | Character reference images (Pollinations) | Free anonymous tier, rate-limited; may watermark unless registered |
 | Real AI video (Replicate) | **PAID** — billed by Replicate. Never runs without your key + model ID |
 | Real AI video (Hugging Face) | Token + possible account billing; verify model pricing |
-| Local GPU inference | Not possible on the target PC (i3/8GB/no GPU) — use a remote worker |
 | MP4 rendering/assembly | Requires FFmpeg (free, local install) |
 
 ## Run on Windows 10 (exact steps)
 
 Target machine: Windows 10, i3 7th gen, 8 GB RAM, no dedicated GPU.
-This setup runs the **website + mock/paid-API workflow** locally. Local AI video
-models are intentionally NOT required (the PC cannot run them well).
+This setup runs the **full free pipeline** locally (AI stills + motion + voice + MP4).
 
 1. Install Node.js 20 LTS from https://nodejs.org (check “Add to PATH”).
 2. Install FFmpeg (required for any MP4 rendering/export):
@@ -99,7 +97,7 @@ models are intentionally NOT required (the PC cannot run them well).
 - `npm install` slow/fails → use Node 20 LTS (not 24+), delete `node_modules`
   and retry: `npm cache clean --force; npm install`.
 - Port 3000 busy → `npm run dev -- -p 3001`.
-- Mock job fails with “FFmpeg was not found” → install FFmpeg (above); storyboard
+- Clip render fails with “FFmpeg was not found” → install FFmpeg (above); storyboard
   and characters are saved, just press Generate again.
 - Replicate 401/404 → wrong token or model ID; copy the exact model id from its
   replicate.com page (format `owner/name` or `owner/name:version-id`).
@@ -116,7 +114,7 @@ app/api/jobs/[jobId]            Live job polling
 app/api/providers               Provider + FFmpeg + planner status
 app/api/media/[...path]         Project-local media files
 lib/planner.ts                  Offline (+optional LLM) storyboard planner
-lib/providers.ts                Provider adapters (mock / replicate / HF / local)
+lib/providers.ts                Provider adapters (slideshow / replicate / HF)
 lib/ffmpeg.ts                   Concat/normalize/SRT/assembly
 lib/store.ts                    JSON file storage (SQLite-suitable later)
 lib/validate.ts                 zod schemas + prompt sanitizing

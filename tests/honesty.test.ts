@@ -44,11 +44,11 @@ describe("validation + providers honesty", () => {
     expect(bad.success).toBe(false);
   });
 
-  it("mock provider is configured and free; paid providers flag missing keys", () => {
+  it("slideshow provider is free, keyless and configured; paid providers flag missing keys", () => {
     const ps = listProviders();
-    const mock = ps.find((p) => p.id === "mock")!;
-    expect(mock.configured).toBe(true);
-    expect(mock.costNote).toMatch(/free/i);
+    const free = ps.find((p) => p.id === "slideshow")!;
+    expect(free.configured).toBe(true);
+    expect(free.costNote).toMatch(/free/i);
     const rep = ps.find((p) => p.id === "replicate")!;
     expect(rep.requiresApiKey).toBe(true);
     if (!process.env.REPLICATE_API_TOKEN) {

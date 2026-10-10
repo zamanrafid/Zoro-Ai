@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [health, setHealth] = useState<{ ok: boolean; summary: string; items: Array<{ id: string; label: string; ok: boolean; detail: string; fix?: string }> } | null>(null);
 
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -54,6 +55,12 @@ export default function Dashboard() {
       setProjects(pj.projects ?? []);
       setProviders(pv.providers ?? []);
       setFfmpeg(pv.ffmpeg ?? { ok: false });
+      try {
+        const h = await fetch("/api/health").then((r) => r.json());
+        setHealth(h);
+      } catch {
+        setHealth(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load dashboard.");
     } finally {
@@ -125,6 +132,28 @@ export default function Dashboard() {
             Install it on Windows with: <code className="text-slate-200">winget install Gyan.FFmpeg</code> then restart the
             terminal and the dev server. Story planning, characters and job tracking still work without it.
           </p>
+        </div>
+      )}
+
+      {health && (
+        <div className={`card mt-6 ${health.ok ? "border-emerald-500/30" : "border-red-500/40"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-bold">System check {health.ok ? "✅" : "❌"}</h2>
+            <button className="btn-ghost text-xs" onClick={refresh}>Re-check</button>
+          </div>
+          <p className="mt-1 text-sm text-muted">{health.summary}</p>
+          <ul className="mt-3 space-y-2">
+            {health.items.map((it) => (
+              <li key={it.id} className="rounded-xl border border-slate-700/60 p-3 text-sm">
+                <p className="font-semibold">
+                  <span className={it.ok ? "text-emerald-300" : "text-red-300"}>{it.ok ? "● " : "● "}</span>
+                  {it.label} — <span className={it.ok ? "text-emerald-300" : "text-red-300"}>{it.ok ? "OK" : "FAILED"}</span>
+                </p>
+                <p className="mt-0.5 break-words text-xs text-muted">{it.detail}</p>
+                {it.fix && <p className="mt-0.5 break-words text-xs text-amber-200">Fix: {it.fix}</p>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

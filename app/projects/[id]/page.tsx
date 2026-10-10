@@ -423,6 +423,14 @@ export default function Studio({ params }: { params: { id: string } }) {
         <span className="badge border-slate-600 text-slate-300">{project.settings.aspectRatio} · {project.settings.durationSec}s · {project.settings.style}</span>
         {activeJobs > 0 && <span className="badge border-blue-500/40 text-blue-300">{activeJobs} job(s) running — live status</span>}
       </div>
+      {project.providerId === "worker" && (
+        <div className="card mt-5 border-emerald-500/30">
+          <p className="text-sm text-emerald-200">
+            Running on <b>your own model server</b> — no third-party service, no key, no account, no per-use fee in this project.
+            “API” here only means ZORO AI talking directly to your server.
+          </p>
+        </div>
+      )}
 
       {/* 1. Prompt + storyboard */}
       <section className="card mt-5">

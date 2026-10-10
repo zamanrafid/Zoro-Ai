@@ -112,15 +112,17 @@ export async function downloadYouTube(url: string, outAbsPath: string, timeoutMs
   }
 }
 
-/** Convert any clip to vertical 9:16 Shorts format (720x1280, center crop). */
-export async function toVertical720x1280(srcAbs: string, outRel: string): Promise<string> {
+/** Convert any clip to vertical 9:16 Shorts format (center crop). Quality picks 720p/1080p. */
+export async function toVertical720x1280(srcAbs: string, outRel: string, best = false): Promise<string> {
+  const W = best ? 1080 : 720;
+  const H = best ? 1920 : 1280;
   const outAbs = path.join(dataDir(), outRel);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       ffmpegBin(),
-      ["-y", "-i", srcAbs, "-vf", "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1,fps=30,format=yuv420p",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", outAbs],
+      ["-y", "-i", srcAbs, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=30,format=yuv420p` + (best ? ",unsharp=5:5:0.5:5:5:0.0" : ""),
+        "-c:v", "libx264", "-preset", best ? "medium" : "veryfast", "-crf", best ? "18" : "21", "-c:a", "aac", outAbs],
       { stdio: ["ignore", "pipe", "pipe"] }
     );
     child.on("error", (e) => reject(new Error(`Could not launch FFmpeg: ${e.message}`)));

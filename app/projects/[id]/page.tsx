@@ -231,11 +231,74 @@ export default function Studio({ params }: { params: { id: string } }) {
     setNotice("Previewing narration with your device's free built-in voice (no paid TTS needed).");
   }
 
-  const [voice, setVoice] = useState("nova");
+  const [voice, setVoice] = useState("aria");
+  const VOICE_OPTIONS = [
+    { id: "aria", label: "Aria — natural English female ★" },
+    { id: "guy", label: "Guy — natural English male" },
+    { id: "emma", label: "Emma — expressive English" },
+    { id: "nabanita", label: "Nabanita — Bangla female" },
+    { id: "pradeep", label: "Pradeep — Bangla male" },
+    { id: "nova", label: "Nova — AI voice (hosted)" },
+    { id: "robot", label: "Robot — offline fallback" }
+  ];
   const [autoLog, setAutoLog] = useState<string[]>([]);
   const [ytUrl, setYtUrl] = useState("");
   const [segSec, setSegSec] = useState(30);
   const [startSec, setStartSec] = useState(0);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const recRef = useRef<{ stream?: MediaStream; rec?: MediaRecorder; chunks: Blob[]; timer?: ReturnType<typeof setInterval> } | null>(null);
+
+  /** Record your own voice with the mic — the most natural voiceover, free. */
+  async function toggleRecord() {
+    if (recording) {
+      const cur = recRef.current;
+      if (cur?.timer) clearInterval(cur.timer);
+      cur?.rec?.stop();
+      return;
+    }
+    setError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot record audio.");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        setRecSecs(0);
+        try {
+          const blob = new Blob(chunks, { type: "audio/webm" });
+          if (blob.size < 1000) { setError("Recording is empty — try again."); return; }
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result));
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+          const r = await fetchJson(`/api/projects/${id}/narration`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audioDataUrl: dataUrl, filename: "my-voice.webm" })
+          }, 120000);
+          if (!r.ok || !r.data.project) throw new Error(apiError(r.status, r.data, "Voice upload failed."));
+          setProject(r.data.project as Project);
+          setNotice("Your recorded voice is attached — mixed under the final export.");
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Voice upload failed.");
+        }
+      };
+      recRef.current = { stream, rec, chunks };
+      const timer = setInterval(() => setRecSecs((s) => s + 1), 1000);
+      recRef.current.timer = timer;
+      rec.start();
+      setRecording(true);
+      setRecSecs(0);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Microphone unavailable.");
+    }
+  }
 
   async function importYouTube() {
     if (!ytUrl.trim()) { setError("Paste a YouTube link (watch / shorts / youtu.be)."); return; }
@@ -721,11 +784,14 @@ export default function Studio({ params }: { params: { id: string } }) {
             const d = await r.json(); if (r.ok) { setProject(d.project); setNotice("Narration saved. Captions/SRT are generated from scene captions."); } else setError(d.error);
           }}>Save narration</button>
           <button className="btn-ghost" onClick={() => speak(script || project.narrationScript || "")}>Preview voice (free, this device)</button>
-          <select className="input w-36" value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="AI voice">
-            {["nova", "alloy", "echo", "fable", "onyx", "shimmer"].map((v) => <option key={v} value={v}>{v}</option>)}
+          <select className="input w-52" value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
+            {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select>
           <button className="btn-ghost" disabled={busy === "tts"} onClick={freeVoiceover}>
-            {busy === "tts" ? "Speaking scenes… (free, ~1 min)" : "Generate free AI voiceover"}
+            {busy === "tts" ? "Speaking scenes… (free)" : "Generate voiceover (free)"}
+          </button>
+          <button className={`btn-ghost ${recording ? "border-red-500/60 text-red-300" : ""}`} onClick={toggleRecord}>
+            {recording ? `⏹ Stop (${recSecs}s)` : "🎙 Record my voice"}
           </button>
           <a className="btn-ghost" href={`/api/projects/${id}/narration`} download={`${project.name}-captions.srt`}>Download SRT</a>
           <label className="btn-ghost cursor-pointer">Upload narration audio
@@ -745,7 +811,8 @@ export default function Studio({ params }: { params: { id: string } }) {
         </div>
         {project.narrationAudioPath && <audio controls src={`/api/media/${project.narrationAudioPath}`} className="mt-3 w-full max-w-xl" />}
         <p className="mt-2 text-xs text-muted">
-          Free AI voiceover uses Pollinations TTS (no key, ≈1 request / 15s). Use only licensed or your own music.
+          Natural voices (Aria/Guy/Emma/Nabanita/Pradeep) are free neural voices, no key.
+          Robot voice works fully offline. Or record/upload your own voice above.
           {project.scenes.length > 12 && ` This project has ${project.scenes.length} scenes — voiceover may take ~${Math.round(project.scenes.length * 0.35)} min. Keep this page open.`}
         </p>
       </section>
@@ -783,7 +850,18 @@ export default function Studio({ params }: { params: { id: string } }) {
               const d = await r.json(); if (r.ok) setProject(d.project);
             }} />
           </label>
+          <label className="text-xs">Quality
+            <select className="input ml-2 w-44" value={project.settings.quality ?? "balanced"} onChange={async (e) => {
+              const r = await fetch(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: { quality: e.target.value } }) });
+              const d = await r.json(); if (r.ok) setProject(d.project); else setError(d.error ?? "Quality update failed.");
+            }}>
+              <option value="fast">Fast 720p</option>
+              <option value="balanced">Balanced 720p ★</option>
+              <option value="best">Best 1080p (slow)</option>
+            </select>
+          </label>
         </div>
+        <p className="mt-1 text-[11px] text-muted">Best = 1080p stills + sharper encode. Slower on weak PCs — Balanced is the sweet spot.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button className="btn-primary" disabled={busy === "assemble"} onClick={assemble}>{busy === "assemble" ? "Rendering…" : "Render final MP4"}</button>
           {project.output?.path && <a className="btn-ghost text-sm" href={`/api/media/${project.output.path}`} download>Download MP4</a>}

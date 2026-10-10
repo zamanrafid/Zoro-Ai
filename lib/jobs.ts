@@ -4,10 +4,15 @@ import { dataDir, getProject, saveProject } from "./store";
 import { downloadUrlToMedia, getReplicatePrediction } from "./providers";
 import { fetchStill, isRetriableFreeError } from "./free";
 import { workerPoll, workerStartJob } from "./worker";
-import { renderStillClip } from "./ffmpeg";
+import { projectQuality, renderStillClip } from "./ffmpeg";
 import type { AspectRatio, GenerationJob, Project, ScenePlan } from "./types";
 
-export function stillDims(aspect: AspectRatio): { width: number; height: number } {
+export function stillDims(aspect: AspectRatio, best = false): { width: number; height: number } {
+  if (best) {
+    if (aspect === "9:16") return { width: 1024, height: 1792 };
+    if (aspect === "1:1") return { width: 1024, height: 1024 };
+    return { width: 1536, height: 864 };
+  }
   if (aspect === "9:16") return { width: 768, height: 1344 };
   if (aspect === "1:1") return { width: 768, height: 768 };
   return { width: 1024, height: 576 };
@@ -46,7 +51,7 @@ export async function materializeStill(
   scene: ScenePlan,
   job: GenerationJob
 ): Promise<{ rel: string }> {
-  const dims = stillDims(project.settings.aspectRatio);
+  const dims = stillDims(project.settings.aspectRatio, projectQuality(project) === "best");
   const seed = job.seed ?? Math.floor(Math.random() * 100000);
   const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed });
   return saveStillBuffer(project, scene, job, buf, "jpg", seed);
@@ -168,7 +173,7 @@ export async function pollOneJob(projectId: string, jobId: string) {
         job.logs.push("Rendering cinematic motion locally with FFmpeg (free)…");
         const stillAbs = path.join(dataDir(), scene.stillPath);
         const rel = `media/clips/${p.id}/${job.id}.mp4`.replace(/\\/g, "/");
-        await renderStillClip(stillAbs, rel, scene.durationSec, p.settings.aspectRatio, scene.index);
+        await renderStillClip(stillAbs, rel, scene.durationSec, p.settings.aspectRatio, scene.index, projectQuality(p));
         try {
           const st = await fs.stat(path.join(dataDir(), rel));
           if (st.size < 1024) throw new Error("empty render");

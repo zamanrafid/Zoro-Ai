@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { dataDir, getProject, saveProject, saveUpload } from "@/lib/store";
-import { buildSrt, concatMp3Parts, concatWavParts } from "@/lib/ffmpeg";
+import { buildSrt, concatMixedToMp3, concatMp3Parts, concatWavParts } from "@/lib/ffmpeg";
 import { FREE_VOICES, checkEspeak, chunkText, espeakToWav, fetchTtsMp3, freeTierNote } from "@/lib/free";
+import { checkEdgeTts, edgeTtsMp3, edgeVoiceName } from "@/lib/edgevoice";
 import { MAX_SCRIPT } from "@/lib/validate";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -35,7 +36,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
   if (typeof body.audioDataUrl === "string") {
     try {
-      const rel = await saveUpload(p.id, "audio", String(body.filename ?? "narration.mp3"), body.audioDataUrl, /^audio\/(mpeg|wav|ogg|x-wav)$/, 25 * 1024 * 1024);
+      const rel = await saveUpload(p.id, "audio", String(body.filename ?? "narration.mp3"), body.audioDataUrl, /^audio\/(mpeg|wav|ogg|x-wav|webm)$/, 25 * 1024 * 1024);
       p.narrationAudioPath = rel;
     } catch (e) {
       return NextResponse.json({ error: e instanceof Error ? e.message : "Audio upload failed." }, { status: 400 });
@@ -53,21 +54,28 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!usable.length) {
       return NextResponse.json({ error: "Write a narration script first (or keep scene captions) — there is no text to speak." }, { status: 400 });
     }
-    // Engine choice: hosted AI voice if reachable, else offline eSpeak NG.
-    // The hosted endpoint currently refuses anonymous callers (402/404), so the
-    // offline engine is the reliable free default — reported honestly either way.
-    let engine: "hosted" | "offline" = "hosted";
-    try {
-      await fetchTtsMp3("voice check", voice);
-    } catch {
+    // Engine choice (all free):
+    // - aria/guy/emma/nabanita/pradeep → natural Edge neural voice, offline fallback to robot.
+    // - nova/... → hosted AI voice, offline fallback to robot.
+    // - robot → offline robot voice directly.
+    let engine: "hosted" | "edge" | "offline" = "hosted";
+    if (edgeVoiceName(voice)) {
+      engine = (await checkEdgeTts()).ok ? "edge" : "offline";
+    } else if (voice === "robot") {
       engine = "offline";
+    } else {
+      try {
+        await fetchTtsMp3("voice check", voice);
+      } catch {
+        engine = "offline";
+      }
     }
     if (engine === "offline" && !(await checkEspeak()).ok) {
       return NextResponse.json(
         {
           error:
-            "Hosted TTS refused anonymous use (HTTP 402 — needs free registration or a paid tier) and eSpeak NG is not installed. " +
-            "Fix (free): register at https://auth.pollinations.ai and set POLLINATIONS_TOKEN, OR install offline voice with: winget install eSpeak-NG.eSpeak-NG"
+            "No voice engine available: hosted TTS refused, edge-tts missing and eSpeak NG not installed. " +
+            "Fix (all free): pip install edge-tts, OR winget install eSpeak-NG.eSpeak-NG, OR register at https://auth.pollinations.ai and set POLLINATIONS_TOKEN."
         },
         { status: 502 }
       );
@@ -76,7 +84,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const dir = path.join(dataDir(), "media", p.id, "audio");
       await fs.mkdir(dir, { recursive: true });
       const parts: string[] = [];
-      const ext = engine === "hosted" ? "mp3" : "wav";
+      const ext = engine === "offline" ? "wav" : "mp3";
       for (const u of usable) {
         for (const chunk of chunkText(u.text, engine === "hosted" ? 700 : 1200)) {
           const partAbs = path.join(dir, `tts_${Date.now()}_${parts.length}.${ext}`);
@@ -92,6 +100,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             const buf = await fetchTtsMp3(chunk, voice);
             await fs.writeFile(partAbs, buf);
             await fs.writeFile(path.join(dataDir(), "free-lock.json"), JSON.stringify({ at: Date.now() }), "utf-8");
+          } else if (engine === "edge") {
+            try {
+              await edgeTtsMp3(chunk, voice, partAbs);
+            } catch {
+              // Natural voice failed mid-run → finish this chunk with the robot, keep going.
+              await espeakToWav(chunk, partAbs.replace(/\.mp3$/, ".wav"));
+              parts.push(partAbs.replace(/\.mp3$/, ".wav"));
+              continue;
+            }
           } else {
             await espeakToWav(chunk, partAbs);
           }
@@ -99,8 +116,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         }
       }
       const outAbs = path.join(dir, `voiceover_${Date.now()}.${ext}`);
-      if (engine === "hosted") await concatMp3Parts(parts, outAbs);
-      else await concatWavParts(parts, outAbs);
+      if (engine === "offline") await concatWavParts(parts, outAbs);
+      else if (parts.some((x) => x.endsWith(".wav"))) await concatMixedToMp3(parts, outAbs);
+      else await concatMp3Parts(parts, outAbs);
       for (const part of parts) await fs.unlink(part).catch(() => undefined);
       p.narrationAudioPath = path.relative(dataDir(), outAbs).replace(/\\/g, "/");
       await saveProject(p);
@@ -110,7 +128,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         note:
           engine === "hosted"
             ? `Free AI voiceover ready (${voice}). ${freeTierNote()}`
-            : "Free offline voiceover ready (eSpeak NG, robotic but fully free and local). For a natural AI voice, register free at auth.pollinations.ai and set POLLINATIONS_TOKEN."
+            : engine === "edge"
+              ? `Natural voiceover ready (${voice}, free neural voice, no key).`
+              : "Offline robot voiceover ready (eSpeak NG, free and local). For a natural voice, pick Aria/Guy/Emma/Nabanita/Pradeep."
       });
     } catch (e) {
       await saveProject(p);

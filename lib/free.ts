@@ -14,7 +14,7 @@
 import { spawn } from "child_process";
 import { espeakBin } from "./tools";
 
-export const FREE_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
+export const FREE_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "aria", "guy", "emma", "nabanita", "pradeep", "robot"] as const;
 export type FreeVoice = (typeof FREE_VOICES)[number];
 
 function authHeaders(): Record<string, string> {

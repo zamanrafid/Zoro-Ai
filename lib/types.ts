@@ -16,6 +16,8 @@ export interface VideoSettings {
   motionIntensity?: "low" | "medium" | "high";
   cameraMovement?: string;
   resolution?: string;
+  /** Render quality: fast (720p, quick) / balanced (720p, cleaner) / best (1080p, slowest). */
+  quality?: "fast" | "balanced" | "best";
   negativePrompt?: string;
 }
 

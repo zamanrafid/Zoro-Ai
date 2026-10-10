@@ -108,7 +108,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         const cutRel = `media/source/${p.id}/cut_${i}.mp4`.replace(/\\/g, "/");
         await cutSegment(srcAbs, absStart, seg.len, cutRel);
         const vRel = `media/shorts/${p.id}/short_${i}_${Date.now()}.mp4`.replace(/\\/g, "/");
-        await toVertical720x1280(path.join(dataDir(), cutRel), vRel);
+        await toVertical720x1280(path.join(dataDir(), cutRel), vRel, p.settings.quality === "best");
         await fs.unlink(path.join(dataDir(), cutRel)).catch(() => undefined);
         shorts.push({ path: vRel, startSec: absStart, lenSec: seg.len });
       }

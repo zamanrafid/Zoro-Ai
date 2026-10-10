@@ -32,6 +32,7 @@ const patchSchema = z.object({
       customStyle: z.string().max(200).optional(),
       motionIntensity: z.enum(["low", "medium", "high"]).optional(),
       cameraMovement: z.string().max(200).optional(),
+      quality: z.enum(["fast", "balanced", "best"]).optional(),
       resolution: z.string().max(40).optional(),
       negativePrompt: z.string().max(1000).optional()
     })

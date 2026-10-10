@@ -2,6 +2,35 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import type { AspectRatio, Project } from "./types";
+
+export type Quality = "fast" | "balanced" | "best";
+export function projectQuality(project: Project): Quality {
+  const q = project.settings.quality;
+  return q === "fast" || q === "best" ? q : "balanced";
+}
+
+/** Output size for an aspect + quality. Default 720p (fast on weak PCs), best = 1080p. */
+export function dimsForQuality(aspect: AspectRatio, quality: Quality): { w: number; h: number } {
+  const base = quality === "best" ? 1080 : 720;
+  if (aspect === "9:16") return { w: base, h: Math.round((base * 16) / 9) };
+  if (aspect === "1:1") return { w: base, h: base };
+  return { w: Math.round((base * 16) / 9), h: base };
+}
+
+function dimsFor(aspect: AspectRatio): { w: number; h: number } {
+  return dimsForQuality(aspect, "balanced");
+}
+
+/** Encoder recipe per quality (best = sharper, smaller CRF, slower preset). */
+export function encodeForQuality(quality: Quality): { crf: string; preset: string; sharpen: boolean } {
+  if (quality === "fast") return { crf: "23", preset: "veryfast", sharpen: false };
+  if (quality === "best") return { crf: "18", preset: "medium", sharpen: true };
+  return { crf: "20", preset: "veryfast", sharpen: false };
+}
+
+export function sharpenFilter(on: boolean): string {
+  return on ? ",unsharp=5:5:0.5:5:5:0.0" : "";
+}
 import { dataDir } from "./store";
 import { checkFfmpeg } from "./providers";
 import { ffmpegBin, renderUnavailableMessage } from "./tools";
@@ -35,12 +64,6 @@ export function buildSrt(project: Project, orderedSceneIds: string[]): string {
     t = end;
   });
   return blocks.join("\n");
-}
-
-function dimsFor(aspect: AspectRatio): { w: number; h: number } {
-  if (aspect === "9:16") return { w: 720, h: 1280 };
-  if (aspect === "1:1") return { w: 720, h: 720 };
-  return { w: 1280, h: 720 };
 }
 
 /** Concatenate scene clips into one MP4, normalized to the project aspect. Throws with clear errors. */
@@ -99,7 +122,7 @@ export async function assembleProject(
     }
     const tmpRel = `media/exports/tmp_${project.id}_${idxStr}_${Date.now()}.mp4`.replace(/\\/g, "/");
     onLog?.(`Animating still for scene ${Number(idxStr) + 1}…`);
-    await renderStillClip(stillAbs, tmpRel, Number(durStr) || 5, project.settings.aspectRatio, Number(idxStr));
+    await renderStillClip(stillAbs, tmpRel, Number(durStr) || 5, project.settings.aspectRatio, Number(idxStr), projectQuality(project));
     clips[i] = path.join(dataDir(), tmpRel);
   }
   for (const c of clips) {
@@ -111,7 +134,9 @@ export async function assembleProject(
     }
   }
 
-  const { w, h } = dimsFor(project.settings.aspectRatio);
+  const quality = projectQuality(project);
+  const enc = encodeForQuality(quality);
+  const { w, h } = dimsForQuality(project.settings.aspectRatio, quality);
   const outRel = `media/exports/${project.id}_${Date.now()}.mp4`.replace(/\\/g, "/");
   const outAbs = path.join(dataDir(), outRel);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
@@ -139,7 +164,7 @@ export async function assembleProject(
   const filterParts: string[] = [];
   for (let i = 0; i < n; i++) {
     filterParts.push(
-      `[${i}:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p[v${i}]`
+      `[${i}:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}[v${i}]`
     );
   }
   const vcat = Array.from({ length: n }, (_, i) => `[v${i}]`).join("") + `concat=n=${n}:v=1:a=0[vcat]`;
@@ -166,9 +191,9 @@ export async function assembleProject(
     ? mapArgs.map((a) => (a === "[vout]" ? "[vburn]" : a))
     : mapArgs;
 
-  const fullArgs = [...args, "-filter_complex", vf, ...finalMap, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-movflags", "+faststart", outAbs];
+  const fullArgs = [...args, "-filter_complex", vf, ...finalMap, "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf, "-movflags", "+faststart", outAbs];
 
-  onLog?.(`Assembling ${n} clip(s) to ${project.settings.aspectRatio}…`);
+  onLog?.(`Assembling ${n} clip(s) to ${project.settings.aspectRatio} at ${w}x${h} (${quality})…`);
   await new Promise<void>((resolve, reject) => {
     const child = spawn(ffmpegBin(), fullArgs, { stdio: ["ignore", "pipe", "pipe"] });
     let err = "";
@@ -206,7 +231,8 @@ export async function renderStillClip(
   outRelPath: string,
   durationSec: number,
   aspect: AspectRatio,
-  variant: number
+  variant: number,
+  quality: Quality = "balanced"
 ): Promise<string> {
   const ff = await checkFfmpeg();
   if (!ff.ok) {
@@ -214,11 +240,13 @@ export async function renderStillClip(
       "FFmpeg was not found, so the free clip could not be rendered. " + renderUnavailableMessage()
     );
   }
-  const { w, h } = dimsFor(aspect);
+  const enc = encodeForQuality(quality);
+  const { w, h } = dimsForQuality(aspect, quality);
   const dur = Math.max(2, Math.min(10, Math.round(durationSec)));
   const frames = dur * 30;
-  const W = w * 2;
-  const H = h * 2;
+  const zoomBase = quality === "best" ? 1.5 : 2;
+  const W = Math.round((w * zoomBase) / 2) * 2;
+  const H = Math.round((h * zoomBase) / 2) * 2;
   // Alternate motion per scene so consecutive scenes feel different.
   const moves = [
     `zoompan=z='min(zoom+0.0012,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
@@ -227,7 +255,7 @@ export async function renderStillClip(
     `zoompan=z='1.15':x='(iw-iw/zoom)*(1-on/${frames})':y='ih/2-(ih/zoom/2)'`
   ];
   const move = moves[Math.abs(variant) % moves.length];
-  const vf = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},${move}:d=${frames}:s=${w}x${h}:fps=30,format=yuv420p`;
+  const vf = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},${move}:d=${frames}:s=${w}x${h}:fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}`;
   const outAbs = path.join(dataDir(), outRelPath);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {
@@ -235,7 +263,7 @@ export async function renderStillClip(
       "-y", "-loop", "1", "-i", stillAbsPath,
       "-vf", vf,
       "-frames:v", String(frames),
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+      "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
       outAbs
     ], { stdio: ["ignore", "pipe", "pipe"] });
     let err = "";
@@ -261,6 +289,20 @@ export async function concatMp3Parts(partAbsPaths: string[], outAbsPath: string)
   await fs.unlink(listFile).catch(() => undefined);
 }
 
+/** Concatenate mixed MP3/WAV parts (edge fallback) into one MP3, re-encoded. */
+export async function concatMixedToMp3(partAbsPaths: string[], outAbsPath: string): Promise<void> {
+  const ff = await checkFfmpeg();
+  if (!ff.ok) throw new Error("FFmpeg is required to join voice parts. " + renderUnavailableMessage());
+  const listFile = `${outAbsPath}.txt`;
+  await fs.writeFile(listFile, partAbsPaths.map((p) => `file '${p.replace(/'/g, "")}'`).join("\n"), "utf-8");
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(ffmpegBin(), ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c:a", "libmp3lame", "-b:a", "128k", outAbsPath],
+      { stdio: ["ignore", "pipe", "pipe"] });
+    child.on("error", (e) => reject(new Error(`Could not launch FFmpeg: ${e.message}`)));
+    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`Voice join failed (exit ${code}).`))));
+  });
+  await fs.unlink(listFile).catch(() => undefined);
+}
 /** Concatenate WAV parts (offline eSpeak chunks) into one WAV, re-encoded for safety. */
 export async function concatWavParts(partAbsPaths: string[], outAbsPath: string): Promise<void> {
   const ff = await checkFfmpeg();

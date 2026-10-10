@@ -20,6 +20,7 @@ export default function Home() {
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [duration, setDuration] = useState(20);
   const [style, setStyle] = useState("cinematic-documentary");
+  const [quality, setQuality] = useState<"fast" | "balanced" | "best">("balanced");
   const [providerId, setProviderId] = useState("slideshow");
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [videos, setVideos] = useState<Vid[]>([]);
@@ -97,7 +98,7 @@ export default function Home() {
         body: JSON.stringify({
           name: text.slice(0, 60) || "Untitled video",
           prompt: text, providerId,
-          settings: { durationSec: duration, aspectRatio: aspect, style, motionIntensity: "medium" }
+          settings: { durationSec: duration, aspectRatio: aspect, style, motionIntensity: "medium", quality }
         })
       }, 30000);
       if (!c.ok || !c.data.project) throw new Error(apiError(c.status, c.data, "Could not start."));
@@ -169,7 +170,7 @@ export default function Home() {
       pushLog("Recording the voiceover…");
       const t = await fetchJson(`/api/projects/${proj.id}/narration`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tts: true, voice: "nova" })
+        body: JSON.stringify({ tts: true, voice: "aria" })
       }, 600000);
       if (!t.ok) throw new Error(apiError(t.status, t.data, "Voiceover failed."));
       p = await getP();
@@ -279,6 +280,11 @@ export default function Home() {
                 </select>
                 <select className="input w-auto" value={duration} onChange={(e) => setDuration(Number(e.target.value))} aria-label="Length">
                   {QUICK_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}
+                </select>
+                <select className="input w-auto" value={quality} onChange={(e) => setQuality(e.target.value as typeof quality)} aria-label="Quality">
+                  <option value="fast">Fast 720p</option>
+                  <option value="balanced">Balanced 720p</option>
+                  <option value="best">Best 1080p</option>
                 </select>
                 <select className="input w-auto" value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Style">
                   {STYLES.map((s) => <option key={s} value={s}>{s}</option>)}

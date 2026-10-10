@@ -73,6 +73,17 @@ export default function Home() {
     const text = prompt.trim();
     if (text.length < 10) { setError("Describe your video in at least 10 characters."); return; }
     if (text.length > MAX_PROMPT) { setError(`Too long (${text.length} / ${MAX_PROMPT}). Shorten it a little.`); return; }
+    // Hosted demo links cannot save or render — warn BEFORE wasting minutes.
+    try {
+      const h = await fetch("/api/health").then((r) => r.json());
+      if (h && h.serverless === true) {
+        const go = confirm(
+          "You are on the hosted demo link: projects vanish between steps and video cannot render here.\n\n" +
+          "Press OK to try anyway (storyboard only), or Cancel and run start-zoro.bat on your PC for the real thing."
+        );
+        if (!go) return;
+      }
+    } catch { /* health unavailable — proceed, errors will surface */ }
     setError("");
     setResult({});
     setLog([]);

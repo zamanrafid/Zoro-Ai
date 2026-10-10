@@ -114,7 +114,7 @@ export default function Studio({ params }: { params: { id: string } }) {
       if (!ok || !data.project) throw new Error(apiError(status, data, "Planning failed."));
       setProject(data.project as Project);
       setScript(((data.project as Project).narrationScript ?? ""));
-      setNotice(`${(data.note as string) ?? "Storyboard ready."} Review scenes and approve characters before generating.`);
+      setNotice((data.note as string) ?? "Storyboard ready!");
     } catch (e) { setError(e instanceof Error ? e.message : "Planning failed."); }
     finally { setBusy(""); }
   }

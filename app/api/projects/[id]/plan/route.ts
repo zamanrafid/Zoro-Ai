@@ -63,11 +63,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
   }
   await saveProject(p);
-  const note =
-    planner === "free"
-      ? "Story planned with the FREE Pollinations text API (no key). Prefer your own key? Set OPENAI_* in .env.local."
-      : planner === "llm"
-        ? "Built with the configured LLM planner."
-        : "Built with the built-in offline planner (no key needed).";
-  return NextResponse.json({ project: p, planner, note });
+  return NextResponse.json({
+    project: p,
+    planner,
+    note: `Storyboard ready! ${board.scenes.length} scenes, ${board.characters.length} characters.`
+  });
 }

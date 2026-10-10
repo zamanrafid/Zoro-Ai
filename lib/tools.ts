@@ -70,6 +70,7 @@ const ESPEAK_PATTERNS = [
   "%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages\\*espeak*\\*\\espeak-ng.exe"
 ];
 const YTDLP_PATTERNS = [
+  "%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages\\yt-dlp*\\yt-dlp.exe",
   "%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages\\yt-dlp*\\*\\yt-dlp.exe",
   "%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\yt-dlp.exe",
   "%ProgramFiles%\\yt-dlp\\yt-dlp.exe"

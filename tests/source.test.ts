@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { isYouTubeUrl, planShorts } from "../lib/source";
 import { isRetriableFreeError } from "../lib/free";
+import { stillPromptFor } from "../lib/jobs";
+import type { Project, ScenePlan } from "../lib/types";
 import { createProjectSchema } from "../lib/validate";
 
 describe("source import guards", () => {
@@ -23,6 +25,19 @@ describe("source import guards", () => {
     const tiny = planShorts(100, 999);
     expect(tiny[0].len).toBe(60);
     expect(planShorts(0, 30)).toEqual([]);
+  });
+
+  it("builds face-first still prompts with strong face negatives", () => {
+    const project = {
+      settings: { style: "cinematic-documentary", quality: "best" },
+      characters: [{ id: "c1", fixedDescription: "Maya, brave archivist" }]
+    } as unknown as Project;
+    const scene = { characterIds: ["c1"], visualPrompt: "Maya enters a dusty library." } as unknown as ScenePlan;
+    const pr = stillPromptFor(project, scene);
+    expect(pr).toContain("symmetrical faces");
+    expect(pr).toContain("detailed expressive eyes");
+    expect(pr).toContain("no deformed");
+    expect(pr).toContain("Maya, brave archivist");
   });
 
   it("retries flaky free-tier errors instead of failing instantly", () => {

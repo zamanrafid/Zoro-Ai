@@ -121,7 +121,7 @@ function buildCharacter(
   const accessories = pick(["leather satchel", "brass compass pendant", "simple wristwatch", "round spectacles", "woven bracelet", "none — clean silhouette"]);
   const distinctiveFeatures = pick(["small scar above the left eyebrow", "mole on the right cheek", "freckles across the nose", "tattoo band on the forearm", "birthmark near the jawline"]);
   const personality = pick(["calm and observant", "determined and resourceful", "warm and curious", "stoic with dry humor"]);
-  const fixedDescription = `${name}, ${age}, ${skinTone} skin, ${eyeColor} eyes, ${hairstyle}, ${faceShape}, ${bodyType}, ${height}, wearing ${clothing} with ${accessories}, distinctive mark: ${distinctiveFeatures}. ${styleHint} style, photorealistic consistent identity.`;
+  const fixedDescription = `${name}, ${age}, ${skinTone} skin, ${eyeColor} eyes, ${hairstyle}, ${faceShape}, highly detailed symmetrical face, ${bodyType}, ${height}, wearing ${clothing} with ${accessories}, distinctive mark: ${distinctiveFeatures}. ${styleHint} style, photorealistic consistent identity.`;
   const now = new Date().toISOString();
   return {
     id: uuidv4(),

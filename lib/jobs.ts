@@ -40,14 +40,17 @@ export function stillPromptFor(project: Project, scene: ScenePlan): string {
     .filter(Boolean)
     .join(" ");
   const best = projectQuality(project) === "best";
+  const quality = projectQuality(project);
   return (
     `Cinematic film still, ${project.settings.style} style, ${scene.visualPrompt} ` +
-    (cast ? `Characters (keep exact identity): ${cast}. ` : "") +
+    (cast ? `Characters (keep exact identity): ${cast}. Frame people in medium shot or closer with faces large, lit by soft key light on the face, facing the viewer, clearly visible and in focus, beautiful detailed symmetrical faces, realistic skin texture, detailed expressive eyes. ` : "") +
     (best
       ? "Ultra-detailed, sharp focus, intricate textures, cinematic lighting, rich color grade, professional film photography. "
-      : "Detailed, sharp focus, cinematic lighting. ") +
-    `No text, no watermark, no logo, no distorted faces, no extra limbs.`
-  ).slice(0, 900);
+      : quality === "balanced"
+        ? "Highly detailed, sharp focus, natural skin texture, cinematic lighting. "
+        : "Detailed, sharp focus, cinematic lighting. ") +
+    `No text, no watermark, no logo, no ugly face, no deformed or disfigured face, no asymmetric or mutated features, no blurry face, no bad eyes, no cross-eyed gaze, no distorted face, no extra limbs, no extra fingers.`
+  ).slice(0, 1000);
 }
 
 export async function materializeStill(
@@ -55,9 +58,11 @@ export async function materializeStill(
   scene: ScenePlan,
   job: GenerationJob
 ): Promise<{ rel: string }> {
-  const dims = stillDims(project.settings.aspectRatio, projectQuality(project) === "best");
+  const q = projectQuality(project);
+  const dims = stillDims(project.settings.aspectRatio, q === "best");
   const seed = job.seed ?? Math.floor(Math.random() * 100000);
-  const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed, enhance: projectQuality(project) === "best" });
+  // AI prompt enhancement for Balanced + Best (better faces, a bit slower). Fast stays raw.
+  const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed, enhance: q !== "fast" });
   return saveStillBuffer(project, scene, job, buf, "jpg", seed);
 }
 

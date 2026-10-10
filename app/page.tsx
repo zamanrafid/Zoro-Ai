@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [health, setHealth] = useState<{ ok: boolean; summary: string; items: Array<{ id: string; label: string; ok: boolean; detail: string; fix?: string }> } | null>(null);
+  const [health, setHealth] = useState<{ ok: boolean; summary: string; serverless?: boolean; items: Array<{ id: string; label: string; ok: boolean; detail: string; fix?: string }> } | null>(null);
 
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -124,6 +124,17 @@ export default function Dashboard() {
           <a className="btn-ghost" href="#create">Create New Video</a>
         </nav>
       </header>
+
+      {health?.serverless && (
+        <div className="card mt-6 border-amber-500/40">
+          <p className="font-semibold text-amber-200">Hosted demo link — video rendering is disabled here.</p>
+          <p className="mt-1 text-sm text-muted">
+            This server cannot keep files or render video (see System check below).
+            For real videos, run on your PC: open <code className="text-slate-200">C:\Users\rafid\zoro-ai\start-zoro.bat</code> (double-click)
+            and use the local site at <code className="text-slate-200">http://localhost:3000</code>.
+          </p>
+        </div>
+      )}
 
       {!ffmpeg.ok && (
         <div className="card mt-6 border-amber-500/30">

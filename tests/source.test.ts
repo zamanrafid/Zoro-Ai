@@ -30,6 +30,7 @@ describe("source import guards", () => {
     expect(isRetriableFreeError("rate-limited, wait and retry")).toBe(true);
     expect(isRetriableFreeError("Free service timed out.")).toBe(true);
     expect(isRetriableFreeError("fetch failed")).toBe(true);
+    expect(isRetriableFreeError("Free service is struggling on its side (HTTP 500).")).toBe(true);
     expect(isRetriableFreeError("Scene for this job no longer exists.")).toBe(false);
     expect(isRetriableFreeError("Invalid project data.")).toBe(false);
   });

@@ -35,6 +35,11 @@ export async function fetchBuffer(url: string, timeoutMs = 120000, minBytes = 20
     if (res.status === 429) {
       throw new Error("Free image/voice service is rate-limited (anonymous ≈1 request / 15s). Wait a little and retry — your project is saved.");
     }
+    if (res.status >= 500 && res.status <= 599) {
+      throw new Error(
+        `Free service is struggling on its side (HTTP ${res.status}). Nothing is lost — keep the page open, retrying automatically.`
+      );
+    }
     if (res.status === 402) {
       throw new Error(
         "Free service refused with HTTP 402 (registration or payment required right now). Fix (free): register at https://auth.pollinations.ai and set POLLINATIONS_TOKEN in .env.local — or wait and retry, limits reset over time. Your project is saved."
@@ -101,7 +106,7 @@ export async function fetchTtsMp3(text: string, voice: string): Promise<Buffer> 
 
 /** Free-tier busy signals worth retrying automatically instead of failing instantly. */
 export function isRetriableFreeError(msg: string): boolean {
-  return /(402|429|rate-limited|timed out|empty response|fetch failed|econn|socket hang up|eai_again|temporarily)/i.test(msg);
+  return /(402|429|timed out|empty response|fetch failed|econn|socket hang up|eai_again|temporarily|http 50[0234]|struggling on its side)/i.test(msg);
 }
 
 /** Free LLM call for storyboard planning. Returns parsed JSON or throws (caller falls back to offline). */

@@ -3,6 +3,12 @@ node_modules/
 out/
 dist/
 
+# Python worker env + caches + outputs (never commit)
+.venv/
+__pycache__/
+worker-server/outputs/
+worker-server/.venv/
+
 # Generated media + local database (never commit user content)
 data/
 !.gitkeep

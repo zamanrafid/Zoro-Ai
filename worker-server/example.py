@@ -84,8 +84,17 @@ def get_pipe():
         use_cuda = torch.cuda.is_available()
     except Exception:
         pass
-    pipe = AutoPipelineForText2Image.from_pretrained(model)
-    pipe.to("cuda" if use_cuda else "cpu")
+    if use_cuda:
+        import torch
+
+        pipe = AutoPipelineForText2Image.from_pretrained(model)
+        pipe.to("cuda")
+    else:
+        # CPU needs float32 (float16 fails with dtype errors) — slower but works.
+        import torch
+
+        pipe = AutoPipelineForText2Image.from_pretrained(model, torch_dtype=torch.float32)
+        pipe.to("cpu")
     PIPE = pipe
     return pipe
 
@@ -98,7 +107,7 @@ def make_still(job_id: str, data: GenerateIn):
         pipe = get_pipe()
         w = max(64, min(1024, 8 * round(data.width / 8)))
         h = max(64, min(1024, 8 * round(data.height / 8)))
-        steps = int(os.environ.get("SD_STEPS", "4" if "turbo" in os.environ.get("SD_MODEL", "") or "tiny" in os.environ.get("SD_MODEL", "") else "20"))
+        steps = int(os.environ.get("SD_STEPS", "4" if "turbo" in os.environ.get("SD_MODEL", "") else ("15" if "tiny" in os.environ.get("SD_MODEL", "") else "20")))
         gen = torch.Generator().manual_seed(data.seed or 0)
         with PIPE_LOCK:  # one inference at a time on small hardware
             img = pipe(prompt=data.prompt, negative_prompt=data.negativePrompt or None,

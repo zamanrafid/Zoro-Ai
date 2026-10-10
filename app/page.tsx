@@ -14,6 +14,23 @@ type StepState = "todo" | "doing" | "done" | "failed";
 
 const QUICK_DURATIONS = [10, 20, 30, 60, 300, 600, 1200];
 const STYLES = ["cinematic-documentary", "realistic", "historical", "dark-mystery", "fantasy", "animation"];
+const HOME_VOICES = [
+  { id: "aria", label: "Aria ♀" },
+  { id: "jenny", label: "Jenny ♀" },
+  { id: "guy", label: "Guy ♂" },
+  { id: "davis", label: "Davis ♂" },
+  { id: "emma", label: "Emma" },
+  { id: "nabanita", label: "Nabanita ♀" },
+  { id: "pradeep", label: "Pradeep ♂" }
+];
+
+function loadPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem("zoro-prefs") ?? "{}") as Record<string, string | number>;
+  } catch {
+    return {};
+  }
+}
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
@@ -21,8 +38,25 @@ export default function Home() {
   const [duration, setDuration] = useState(20);
   const [style, setStyle] = useState("cinematic-documentary");
   const [quality, setQuality] = useState<"fast" | "balanced" | "best">("balanced");
+  const [voice, setVoice] = useState("aria");
   const [providerId, setProviderId] = useState("slideshow");
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+
+  // Personal editor: remember your picks on this PC.
+  useEffect(() => {
+    const p = loadPrefs();
+    if (p.aspect) setAspect(p.aspect as typeof aspect);
+    if (p.duration) setDuration(Number(p.duration) || 20);
+    if (p.style) setStyle(String(p.style));
+    if (p.quality) setQuality(p.quality as typeof quality);
+    if (p.providerId) setProviderId(String(p.providerId));
+    if (p.voice) setVoice(String(p.voice));
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("zoro-prefs", JSON.stringify({ aspect, duration, style, quality, providerId, voice }));
+    } catch { /* private mode — skip */ }
+  }, [aspect, duration, style, quality, providerId, voice]);
   const [videos, setVideos] = useState<Vid[]>([]);
   const [sysOk, setSysOk] = useState<boolean | null>(null);
 
@@ -170,7 +204,7 @@ export default function Home() {
       pushLog("Recording the voiceover…");
       const t = await fetchJson(`/api/projects/${proj.id}/narration`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tts: true, voice: "aria" })
+        body: JSON.stringify({ tts: true, voice })
       }, 600000);
       if (!t.ok) throw new Error(apiError(t.status, t.data, "Voiceover failed."));
       p = await getP();
@@ -285,6 +319,9 @@ export default function Home() {
                   <option value="fast">Fast 720p</option>
                   <option value="balanced">Balanced 720p</option>
                   <option value="best">Best 1080p</option>
+                </select>
+                <select className="input w-auto" value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
+                  {HOME_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
                 <select className="input w-auto" value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Style">
                   {STYLES.map((s) => <option key={s} value={s}>{s}</option>)}

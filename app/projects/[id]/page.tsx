@@ -233,14 +233,17 @@ export default function Studio({ params }: { params: { id: string } }) {
 
   const [voice, setVoice] = useState("aria");
   const VOICE_OPTIONS = [
-    { id: "aria", label: "Aria — natural English female ★" },
-    { id: "guy", label: "Guy — natural English male" },
+    { id: "aria", label: "Aria — English female, natural ★" },
+    { id: "jenny", label: "Jenny — English female, warm" },
+    { id: "guy", label: "Guy — English male, natural" },
+    { id: "davis", label: "Davis — English male, deep" },
     { id: "emma", label: "Emma — expressive English" },
     { id: "nabanita", label: "Nabanita — Bangla female" },
     { id: "pradeep", label: "Pradeep — Bangla male" },
     { id: "nova", label: "Nova — AI voice (hosted)" },
     { id: "robot", label: "Robot — offline fallback" }
   ];
+  const [voiceRate, setVoiceRate] = useState<"slow" | "normal" | "fast">("normal");
   const [autoLog, setAutoLog] = useState<string[]>([]);
   const [ytUrl, setYtUrl] = useState("");
   const [segSec, setSegSec] = useState(30);
@@ -444,7 +447,7 @@ export default function Studio({ params }: { params: { id: string } }) {
         `/api/projects/${id}/narration`,
         {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tts: true, voice })
+          body: JSON.stringify({ tts: true, voice, rate: voiceRate })
         },
         600000
       );
@@ -786,6 +789,11 @@ export default function Studio({ params }: { params: { id: string } }) {
           <button className="btn-ghost" onClick={() => speak(script || project.narrationScript || "")}>Preview voice (free, this device)</button>
           <select className="input w-52" value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
             {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+          </select>
+          <select className="input w-28" value={voiceRate} onChange={(e) => setVoiceRate(e.target.value as typeof voiceRate)} aria-label="Voice speed">
+            <option value="slow">Slow voice</option>
+            <option value="normal">Normal speed</option>
+            <option value="fast">Fast voice</option>
           </select>
           <button className="btn-ghost" disabled={busy === "tts"} onClick={freeVoiceover}>
             {busy === "tts" ? "Speaking scenes… (free)" : "Generate voiceover (free)"}

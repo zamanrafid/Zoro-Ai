@@ -45,7 +45,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (body.clearAudio === true) p.narrationAudioPath = undefined;
 
   if (body.tts === true) {
-    const voice = (FREE_VOICES as readonly string[]).includes(String(body.voice)) ? String(body.voice) : "nova";
+    const voice = (FREE_VOICES as readonly string[]).includes(String(body.voice)) ? String(body.voice) : "aria";
+    const rate = body.rate === "slow" || body.rate === "fast" ? body.rate : ("normal" as "slow" | "normal" | "fast");
     const ordered = p.sceneOrder
       .map((sid) => p.scenes.find((s) => s.id === sid))
       .filter((s): s is NonNullable<typeof s> => Boolean(s));
@@ -101,7 +102,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           while (cursor < tasks.length) {
             const i = cursor++;
             try {
-              await edgeTtsMp3(tasks[i], voice, partFor(i));
+              await edgeTtsMp3(tasks[i], voice, partFor(i), rate);
               parts[i] = partFor(i);
             } catch {
               // Natural voice failed for this chunk → robot fallback, keep going.

@@ -63,11 +63,13 @@ export interface StillSpec {
   height: number;
   seed: number;
   model?: string;
+  /** AI prompt enhancement (better stills, slower). Used for Best quality. */
+  enhance?: boolean;
 }
 
 export function stillUrl(s: StillSpec): string {
   const nologo = process.env.POLLINATIONS_TOKEN ? "true" : "false";
-  const q = `width=${s.width}&height=${s.height}&seed=${s.seed}&model=${encodeURIComponent(s.model ?? "flux")}&nologo=${nologo}&${referrerParam()}`;
+  const q = `width=${s.width}&height=${s.height}&seed=${s.seed}&model=${encodeURIComponent(s.model ?? "flux")}&nologo=${nologo}${s.enhance ? "&enhance=true" : ""}&${referrerParam()}`;
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(s.prompt)}?${q}`;
 }
 

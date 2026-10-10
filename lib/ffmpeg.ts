@@ -164,7 +164,7 @@ export async function assembleProject(
   const filterParts: string[] = [];
   for (let i = 0; i < n; i++) {
     filterParts.push(
-      `[${i}:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}[v${i}]`
+      `[${i}:v]scale=${w}:${h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}[v${i}]`
     );
   }
   const vcat = Array.from({ length: n }, (_, i) => `[v${i}]`).join("") + `concat=n=${n}:v=1:a=0[vcat]`;
@@ -255,7 +255,7 @@ export async function renderStillClip(
     `zoompan=z='1.15':x='(iw-iw/zoom)*(1-on/${frames})':y='ih/2-(ih/zoom/2)'`
   ];
   const move = moves[Math.abs(variant) % moves.length];
-  const vf = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},${move}:d=${frames}:s=${w}x${h}:fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}`;
+  const vf = `scale=${W}:${H}:flags=lanczos:force_original_aspect_ratio=increase,crop=${W}:${H},${move}:d=${frames}:s=${w}x${h}:fps=30,format=yuv420p${sharpenFilter(enc.sharpen)}`;
   const outAbs = path.join(dataDir(), outRelPath);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {

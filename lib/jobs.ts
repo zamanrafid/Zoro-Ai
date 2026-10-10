@@ -39,9 +39,13 @@ export function stillPromptFor(project: Project, scene: ScenePlan): string {
     .map((cid) => project.characters.find((c) => c.id === cid)?.fixedDescription)
     .filter(Boolean)
     .join(" ");
+  const best = projectQuality(project) === "best";
   return (
     `Cinematic film still, ${project.settings.style} style, ${scene.visualPrompt} ` +
     (cast ? `Characters (keep exact identity): ${cast}. ` : "") +
+    (best
+      ? "Ultra-detailed, sharp focus, intricate textures, cinematic lighting, rich color grade, professional film photography. "
+      : "Detailed, sharp focus, cinematic lighting. ") +
     `No text, no watermark, no logo, no distorted faces, no extra limbs.`
   ).slice(0, 900);
 }
@@ -53,7 +57,7 @@ export async function materializeStill(
 ): Promise<{ rel: string }> {
   const dims = stillDims(project.settings.aspectRatio, projectQuality(project) === "best");
   const seed = job.seed ?? Math.floor(Math.random() * 100000);
-  const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed });
+  const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed, enhance: projectQuality(project) === "best" });
   return saveStillBuffer(project, scene, job, buf, "jpg", seed);
 }
 

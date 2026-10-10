@@ -11,7 +11,9 @@ import path from "path";
 
 export const EDGE_VOICES = [
   { id: "aria", label: "Aria — English female, natural", edge: "en-US-AriaNeural" },
+  { id: "jenny", label: "Jenny — English female, warm", edge: "en-US-JennyNeural" },
   { id: "guy", label: "Guy — English male, natural", edge: "en-US-GuyNeural" },
+  { id: "davis", label: "Davis — English male, deep", edge: "en-US-DavisNeural" },
   { id: "emma", label: "Emma — English, expressive", edge: "en-US-EmmaMultilingualNeural" },
   { id: "nabanita", label: "Nabanita — Bangla female", edge: "bn-BD-NabanitaNeural" },
   { id: "pradeep", label: "Pradeep — Bangla male", edge: "bn-BD-PradeepNeural" }
@@ -70,17 +72,18 @@ export async function checkEdgeTts(): Promise<{ ok: boolean; detail?: string }> 
   return c ? { ok: true, detail: "edge-tts ready (natural neural voices, free)" } : { ok: false };
 }
 
-/** Synthesize one chunk to MP3. Throws with install help when unavailable. */
-export async function edgeTtsMp3(text: string, voiceId: string, mp3AbsPath: string): Promise<void> {
+/** Synthesize one chunk to MP3. rate: slow|normal|fast. Throws with install help when unavailable. */
+export async function edgeTtsMp3(text: string, voiceId: string, mp3AbsPath: string, rate: "slow" | "normal" | "fast" = "normal"): Promise<void> {
   const c = await resolveEdgeTts();
   if (!c) {
     throw new Error("Natural voice needs the free edge-tts tool. Install with: pip install edge-tts (then restart the server).");
   }
   const edge = edgeVoiceName(voiceId) ?? "en-US-AriaNeural";
+  const flag = rate === "slow" ? "-10%" : rate === "fast" ? "+15%" : "+0%";
   const clean = text.replace(/\s+/g, " ").trim().slice(0, 1500);
   if (!clean) throw new Error("Empty narration text.");
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(c.cmd, [...c.args, "--voice", edge, "--text", clean, "--write-media", mp3AbsPath], {
+    const child = spawn(c.cmd, [...c.args, "--voice", edge, `--rate=${flag}`, "--text", clean, "--write-media", mp3AbsPath], {
       stdio: ["ignore", "pipe", "pipe"]
     });
     let err = "";

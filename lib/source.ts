@@ -121,7 +121,7 @@ export async function toVertical720x1280(srcAbs: string, outRel: string, best = 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       ffmpegBin(),
-      ["-y", "-i", srcAbs, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=30,format=yuv420p` + (best ? ",unsharp=5:5:0.5:5:5:0.0" : ""),
+      ["-y", "-i", srcAbs, "-vf", `scale=${W}:${H}:flags=lanczos:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=30,format=yuv420p` + (best ? ",unsharp=5:5:0.5:5:5:0.0" : ""),
         "-c:v", "libx264", "-preset", best ? "medium" : "veryfast", "-crf", best ? "18" : "21", "-c:a", "aac", outAbs],
       { stdio: ["ignore", "pipe", "pipe"] }
     );

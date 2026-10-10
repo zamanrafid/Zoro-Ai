@@ -1,20 +1,24 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getProject, saveProject, newId } from "@/lib/store";
+import { promises as fs } from "fs";
+import path from "path";
+import { dataDir, getProject, saveProject, newId } from "@/lib/store";
 import {
   createReplicatePrediction,
   indexJob,
   listProviders
 } from "@/lib/providers";
 import { freeTierNote } from "@/lib/free";
+import { stillDims } from "@/lib/jobs";
+import { getWorkerBase, workerStartJob } from "@/lib/worker";
 import type { GenerationJob } from "@/lib/types";
 
 /**
  * POST: start a generation job for one scene.
  * Body: { sceneId, kind?: "video" | "still" }
- * - kind "still": FREE AI still image (any provider selected).
- * - kind "video": per project.providerId (slideshow = free movie mode).
+ * - kind "still": free still, or YOUR worker when the project uses it.
+ * - kind "video": per project.providerId (slideshow / worker / replicate / huggingface).
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const p = await getProject(params.id);
@@ -39,7 +43,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   };
 
   if (kind === "still") {
-    job.logs.push(`Free still queued for scene ${scene.index + 1} (Pollinations, no key). ${freeTierNote()}`);
+    if (p.providerId === "worker") {
+      job.providerId = "worker-still";
+      job.logs.push("Still queued on YOUR model server (no third parties).");
+    } else {
+      job.logs.push(`Free still queued for scene ${scene.index + 1} (Pollinations, no key). ${freeTierNote()}`);
+    }
     p.jobs.push(job);
     await saveProject(p);
     await indexJob(p.id, job.id);
@@ -63,6 +72,56 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { status: 409 }
     );
   }
+  if (provider.id === "worker") {
+    if (!getWorkerBase()) {
+      return NextResponse.json(
+        { error: "WORKER_URL is not set. Run worker-server/example.py (or your own server per worker-server/README) and set WORKER_URL in .env.local. Nothing was sent anywhere." },
+        { status: 409 }
+      );
+    }
+    try {
+      const dims = stillDims(p.settings.aspectRatio);
+      // Forward the first approved character reference as data (your model decides how to use it).
+      let referenceImageDataUrl: string | undefined;
+      for (const cid of scene.characterIds) {
+        const ch = p.characters.find((c) => c.id === cid);
+        if (ch?.approved && ch.referenceImagePath) {
+          try {
+            const abs = path.join(dataDir(), ch.referenceImagePath);
+            const st = await fs.stat(abs);
+            if (st.size < 6 * 1024 * 1024) {
+              const ext = ch.referenceImagePath.toLowerCase().endsWith(".png") ? "png" : "jpeg";
+              referenceImageDataUrl = `data:image/${ext};base64,${(await fs.readFile(abs)).toString("base64")}`;
+            }
+          } catch { /* ref unreadable — send without it */ }
+          break;
+        }
+      }
+      const started = await workerStartJob({
+        kind: "clip",
+        prompt: scene.visualPrompt,
+        negativePrompt: scene.negativePrompt ?? p.negativePrompt,
+        width: dims.width,
+        height: dims.height,
+        durationSec: scene.durationSec,
+        seed: job.seed,
+        referenceImageDataUrl
+      });
+      job.providerJobId = started.jobId;
+      job.status = "processing";
+      job.model = "worker";
+      job.logs.push(`Your worker accepted clip job ${started.jobId}. No third party involved.`);
+    } catch (e) {
+      job.status = "failed";
+      job.error = e instanceof Error ? e.message : "Worker request failed.";
+      job.logs.push(job.error);
+    }
+    p.jobs.push(job);
+    await saveProject(p);
+    await indexJob(p.id, job.id);
+    return NextResponse.json({ job }, { status: 201 });
+  }
+
   if (provider.id === "replicate") {
     try {
       const refUrls: string[] = [];

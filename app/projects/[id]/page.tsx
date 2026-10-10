@@ -289,7 +289,7 @@ export default function Studio({ params }: { params: { id: string } }) {
   /** One-click full movie: storyboard → stills → clips → voiceover → MP4. Skips finished steps. */
   async function autoMake() {
     if (!project) return;
-    if (project.providerId !== "slideshow") {
+    if (project.providerId === "replicate" || project.providerId === "huggingface") {
       if (!confirm("This project uses a paid provider — clips will cost money. Continue? (For a free run, create a new project in Free Movie Mode.)")) return;
     }
     setBusy("auto"); setError(""); setNotice(""); setAutoLog([]);
@@ -600,8 +600,8 @@ export default function Studio({ params }: { params: { id: string } }) {
             const latest = jobs[jobs.length - 1];
             const stillJob = [...jobs].reverse().find((j) => j.providerId === "free-still");
             const chars = s.characterIds.map((cid) => project.characters.find((c) => c.id === cid)).filter(Boolean);
-            const clipLabel = project.providerId === "slideshow" ? "Generate free clip" : "Generate clip (paid)";
-            const tag = latest?.providerId === "free-still" ? " (free still)" : latest?.providerId === "slideshow" ? " (free)" : "";
+            const clipLabel = project.providerId === "slideshow" ? "Generate free clip" : project.providerId === "worker" ? "Generate clip (your model)" : "Generate clip (paid)";
+            const tag = latest?.providerId === "free-still" ? " (free still)" : latest?.providerId === "slideshow" ? " (free)" : latest?.providerId === "worker" || latest?.providerId === "worker-still" ? " (your model)" : "";
             return (
               <li key={s.id} className="rounded-xl border border-slate-700 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">

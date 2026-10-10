@@ -29,6 +29,18 @@ export const PROVIDER_META: Array<{
     resolutions: ["720x1280", "1280x720", "720x720"]
   },
   {
+    id: "worker",
+    label: "Your own model server (no dependence)",
+    kind: "worker",
+    requiresApiKey: false,
+    costNote: "Your hardware, your model, zero per-use fee. No Pollinations, no Replicate, no Hugging Face involved.",
+    supportsReferenceImages: true,
+    referenceNote: "Reference images are forwarded to YOUR server — identity behavior depends on your model.",
+    maxClipSec: 5,
+    supportedAspects: ["9:16", "16:9", "1:1"],
+    resolutions: ["server-dependent"]
+  },
+  {
     id: "replicate",
     label: "Replicate (bring your own model)",
     kind: "replicate",
@@ -62,6 +74,17 @@ export function listProviders(): ProviderInfo[] {
         ...m,
         configured: ok,
         missing: ok ? undefined : "Set REPLICATE_API_TOKEN and REPLICATE_VIDEO_MODEL in .env.local. Verify the exact model ID and pricing on replicate.com before use."
+      };
+    }
+    if (m.id === "worker") {
+      const ok = Boolean(process.env.WORKER_URL);
+      return {
+        ...m,
+        maxClipSec: Math.max(2, Math.min(30, Number(process.env.WORKER_MAX_CLIP_SEC) || 5)),
+        configured: ok,
+        missing: ok
+          ? undefined
+          : "WORKER_URL is not set. Run worker-server/example.py (or your own server following worker-server/README) and set WORKER_URL in .env.local."
       };
     }
     if (m.id === "huggingface") {

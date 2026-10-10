@@ -3,6 +3,7 @@ import path from "path";
 import { dataDir, getProject, saveProject } from "./store";
 import { downloadUrlToMedia, getReplicatePrediction } from "./providers";
 import { fetchStill, isRetriableFreeError } from "./free";
+import { workerPoll, workerStartJob } from "./worker";
 import { renderStillClip } from "./ffmpeg";
 import type { AspectRatio, GenerationJob, Project, ScenePlan } from "./types";
 
@@ -48,13 +49,35 @@ export async function materializeStill(
   const dims = stillDims(project.settings.aspectRatio);
   const seed = job.seed ?? Math.floor(Math.random() * 100000);
   const buf = await fetchStill({ prompt: stillPromptFor(project, scene), ...dims, seed });
-  const rel = `media/stills/${project.id}/${scene.id}_${seed}.jpg`.replace(/\\/g, "/");
+  return saveStillBuffer(project, scene, job, buf, "jpg", seed);
+}
+
+/** Save raw image bytes (own worker or free service) as this scene's still. */
+export function saveStillBuffer(
+  project: Project,
+  scene: ScenePlan,
+  job: GenerationJob,
+  buf: Buffer,
+  ext: string,
+  seed: number
+): Promise<{ rel: string }> {
+  const safeExt = /^(jpg|jpeg|png|webp)$/.test(ext) ? ext : "jpg";
+  const rel = `media/stills/${project.id}/${scene.id}_${seed}.${safeExt}`.replace(/\\/g, "/");
   const abs = path.join(dataDir(), rel);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, buf);
-  scene.stillPath = rel;
-  job.posterPath = rel;
-  return { rel };
+  return (async () => {
+    if (buf.length < 2048) throw new Error("Your worker returned an empty image — treating as failure, not success.");
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, buf);
+    scene.stillPath = rel;
+    job.posterPath = rel;
+    return { rel };
+  })();
+}
+
+function extFromUrl(u: string, fallback: string): string {
+  const m = u.toLowerCase().match(/\.(mp4|webm|mov|png|jpe?g|webp)(\?|$)/);
+  if (!m) return fallback;
+  return m[1] === "jpeg" ? "jpg" : m[1];
 }
 
 /** Advance exactly one job and persist. Handles free stills, slideshow clips, replicate. */
@@ -167,8 +190,97 @@ export async function pollOneJob(projectId: string, jobId: string) {
     return { project: p, job };
   }
 
-  if (job.providerId === "replicate" && job.providerJobId) {
+  // OWN MODEL: still image from your worker.
+  if (job.providerId === "worker-still") {
+    if (!scene) {
+      job.status = "failed";
+      job.error = "Scene for this job no longer exists (storyboard was replanned).";
+      await saveProject(p);
+      return { project: p, job };
+    }
     try {
+      const dims = stillDims(p.settings.aspectRatio);
+      if (!job.providerJobId) {
+        const started = await workerStartJob({
+          kind: "still",
+          prompt: stillPromptFor(p, scene),
+          negativePrompt: scene.negativePrompt ?? p.negativePrompt,
+          width: dims.width,
+          height: dims.height,
+          seed: job.seed
+        });
+        job.providerJobId = started.jobId;
+        job.status = "processing";
+        job.logs.push(`Your worker accepted still job ${started.jobId}.`);
+      } else {
+        const st = await workerPoll(job.providerJobId);
+        if (st.status === "succeeded") {
+          if (!st.outputUrl || !/^https?:\/\//.test(st.outputUrl)) {
+            throw new Error("Your worker reported success but gave no downloadable outputUrl.");
+          }
+          const res = await fetch(st.outputUrl);
+          if (!res.ok) throw new Error(`Could not download your worker's image (${res.status}).`);
+          const buf = Buffer.from(await res.arrayBuffer());
+          await saveStillBuffer(p, scene, job, buf, extFromUrl(st.outputUrl, "jpg"), job.seed ?? 0);
+          job.status = "succeeded";
+          job.attempts = 0;
+          job.progress = 100;
+          job.logs.push("Still from YOUR model saved — zero third-party involvement.");
+        } else if (st.status === "failed" || st.status === "cancelled") {
+          job.status = st.status === "cancelled" ? "cancelled" : "failed";
+          job.error = st.error ?? "Your worker failed this job.";
+          job.logs.push(job.error);
+        } else {
+          job.status = "processing";
+          job.progress = Math.min(95, (job.progress ?? 10) + 10);
+          job.logs.push(`Your worker status: ${st.status}.`);
+        }
+      }
+    } catch (e) {
+      job.status = "failed";
+      job.error = e instanceof Error ? e.message : "Worker still failed.";
+      job.logs.push(job.error);
+    }
+    await saveProject(p);
+    return { project: p, job };
+  }
+
+  // OWN MODEL: video clip from your worker.
+  if (job.providerId === "worker" && job.providerJobId) {
+    try {
+      const st = await workerPoll(job.providerJobId);
+      if (st.status === "succeeded") {
+        if (!st.outputUrl || !/^https?:\/\//.test(st.outputUrl)) {
+          job.status = "failed";
+          job.error = "Your worker reported success but gave no downloadable outputUrl. Treating as failure (no fake success).";
+          job.logs.push(job.error);
+        } else {
+          const rel = `media/clips/${p.id}/${job.id}.${extFromUrl(st.outputUrl, "mp4")}`.replace(/\\/g, "/");
+          await downloadUrlToMedia(st.outputUrl, rel);
+          job.clipPath = rel;
+          job.status = "succeeded";
+          job.progress = 100;
+          job.logs.push("Clip from YOUR model downloaded — zero third-party involvement.");
+        }
+      } else if (st.status === "failed" || st.status === "cancelled") {
+        job.status = st.status === "cancelled" ? "cancelled" : "failed";
+        job.error = st.error ?? "Your worker failed this job.";
+        job.logs.push(job.error);
+      } else {
+        job.status = "processing";
+        job.progress = Math.min(95, (job.progress ?? 10) + 5);
+        job.logs.push(`Your worker status: ${st.status}.`);
+      }
+    } catch (e) {
+      job.status = "failed";
+      job.error = e instanceof Error ? e.message : "Worker status check failed.";
+      job.logs.push(job.error);
+    }
+    await saveProject(p);
+    return { project: p, job };
+  }
+
+  if (job.providerId === "replicate" && job.providerJobId) {    try {
       const pred = await getReplicatePrediction(job.providerJobId);
       if (pred.status === "succeeded") {
         const out = Array.isArray(pred.output) ? pred.output[0] : pred.output;

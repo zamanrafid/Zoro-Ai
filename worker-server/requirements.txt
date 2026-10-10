@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pillow>=10.0
+# Optional but needed for real inference (CPU wheels for Windows):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install diffusers transformers accelerate safetensors

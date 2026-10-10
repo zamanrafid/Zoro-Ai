@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { dataDir } from "./store";
+import { ffmpegBin, ffprobeBin, ytdlpBin } from "./tools";
 
 export const MAX_SOURCE_BYTES = 500 * 1024 * 1024;
 export const MAX_SOURCE_SEC = 1800; // 30 min cap like generated videos
@@ -22,7 +23,7 @@ export function isYouTubeUrl(u: string): boolean {
 
 export async function checkYtdlp(): Promise<{ ok: boolean; version?: string }> {
   return new Promise((resolve) => {
-    const child = spawn("yt-dlp", ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = spawn(ytdlpBin(), ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
     child.stdout?.on("data", (d) => (out += String(d)));
     child.on("error", () => resolve({ ok: false }));
@@ -43,7 +44,7 @@ export async function probeVideo(absPath: string): Promise<Probe> {
   if (!st || st.size < 1024) throw new Error("Video file is missing or empty.");
   const out = await new Promise<string>((resolve, reject) => {
     const child = spawn(
-      "ffprobe",
+      ffprobeBin(),
       ["-v", "error", "-show_entries", "format=duration,size", "-show_entries", "stream=width,height", "-of", "default=noprint_wrappers=1", absPath],
       { stdio: ["ignore", "pipe", "ignore"] }
     );
@@ -72,7 +73,7 @@ export async function downloadYouTube(url: string, outAbsPath: string, timeoutMs
   await fs.mkdir(path.dirname(outAbsPath), { recursive: true });
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      "yt-dlp",
+      ytdlpBin(),
       [
         "--no-playlist",
         "--max-filesize", "500M",
@@ -117,7 +118,7 @@ export async function toVertical720x1280(srcAbs: string, outRel: string): Promis
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      "ffmpeg",
+      ffmpegBin(),
       ["-y", "-i", srcAbs, "-vf", "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1,fps=30,format=yuv420p",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", outAbs],
       { stdio: ["ignore", "pipe", "pipe"] }
@@ -134,7 +135,7 @@ export async function cutSegment(srcAbs: string, startSec: number, lenSec: numbe
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      "ffmpeg",
+      ffmpegBin(),
       ["-y", "-ss", String(Math.max(0, startSec)), "-i", srcAbs, "-t", String(lenSec),
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-movflags", "+faststart", outAbs],
       { stdio: ["ignore", "pipe", "pipe"] }

@@ -12,6 +12,7 @@
  */
 
 import { spawn } from "child_process";
+import { espeakBin } from "./tools";
 
 export const FREE_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
 export type FreeVoice = (typeof FREE_VOICES)[number];
@@ -144,7 +145,8 @@ export function freeTierNote(): string {
 /* ---------------- Offline fallback: eSpeak NG (free, local, robotic) ---------------- */
 
 export async function checkEspeak(): Promise<{ ok: boolean; version?: string }> {
-  for (const bin of ["espeak-ng", "espeak"]) {
+  const bins = [espeakBin(), "espeak-ng", "espeak"].filter((b): b is string => Boolean(b));
+  for (const bin of [...new Set(bins)]) {
     const found = await new Promise<{ ok: boolean; version?: string }>((resolve) => {
       const child = spawn(bin, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
       let out = "";
@@ -172,11 +174,12 @@ export async function espeakToWav(text: string, wavAbsPath: string, speed = 170)
   const clean = text.replace(/\s+/g, " ").trim().slice(0, 1500);
   if (!clean) throw new Error("Empty narration text.");
   await new Promise<void>((resolve, reject) => {
+    const first = espeakBin() ?? "espeak-ng";
     const tryBin = (bin: string) => {
       const child = spawn(bin, ["-v", "en", "-s", String(speed), "-w", wavAbsPath, clean], { stdio: "ignore" });
-      child.on("error", () => (bin === "espeak-ng" ? tryBin("espeak") : reject(new Error("Could not launch eSpeak."))));
+      child.on("error", () => (bin !== "espeak" ? tryBin("espeak") : reject(new Error("Could not launch eSpeak."))));
       child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`eSpeak failed (exit ${code}).`))));
     };
-    tryBin("espeak-ng");
+    tryBin(first);
   });
 }

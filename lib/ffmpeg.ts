@@ -4,6 +4,7 @@ import path from "path";
 import type { AspectRatio, Project } from "./types";
 import { dataDir } from "./store";
 import { checkFfmpeg } from "./providers";
+import { ffmpegBin, renderUnavailableMessage } from "./tools";
 
 export interface AssembleOptions {
   burnCaptions: boolean;
@@ -52,9 +53,7 @@ export async function assembleProject(
   const ff = await checkFfmpeg();
   if (!ff.ok) {
     throw new Error(
-      "FFmpeg was not found on this machine, so the final video cannot be rendered. " +
-        "Install it with: winget install Gyan.FFmpeg  (then restart the terminal) " +
-        "or download from https://ffmpeg.org/download.html and add it to PATH."
+      "FFmpeg was not found on this machine, so the final video cannot be rendered. " + renderUnavailableMessage()
     );
   }
   // Prefer finished video clips; fall back to free AI stills (rendered with
@@ -171,7 +170,7 @@ export async function assembleProject(
 
   onLog?.(`Assembling ${n} clip(s) to ${project.settings.aspectRatio}…`);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("ffmpeg", fullArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(ffmpegBin(), fullArgs, { stdio: ["ignore", "pipe", "pipe"] });
     let err = "";
     child.stderr?.on("data", (d) => (err += String(d).slice(0, 4000)));
     child.on("error", (e) => reject(new Error(`Could not launch FFmpeg: ${e.message}`)));
@@ -212,8 +211,7 @@ export async function renderStillClip(
   const ff = await checkFfmpeg();
   if (!ff.ok) {
     throw new Error(
-      "FFmpeg was not found, so the free clip could not be rendered. " +
-        "Install it with: winget install Gyan.FFmpeg (then restart the terminal)."
+      "FFmpeg was not found, so the free clip could not be rendered. " + renderUnavailableMessage()
     );
   }
   const { w, h } = dimsFor(aspect);
@@ -233,7 +231,7 @@ export async function renderStillClip(
   const outAbs = path.join(dataDir(), outRelPath);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("ffmpeg", [
+    const child = spawn(ffmpegBin(), [
       "-y", "-loop", "1", "-i", stillAbsPath,
       "-vf", vf,
       "-frames:v", String(frames),
@@ -251,11 +249,11 @@ export async function renderStillClip(
 /** Concatenate MP3 parts (free TTS chunks) into one MP3. */
 export async function concatMp3Parts(partAbsPaths: string[], outAbsPath: string): Promise<void> {
   const ff = await checkFfmpeg();
-  if (!ff.ok) throw new Error("FFmpeg is required to join voice parts. Install with: winget install Gyan.FFmpeg");
+  if (!ff.ok) throw new Error("FFmpeg is required to join voice parts. " + renderUnavailableMessage());
   const listFile = `${outAbsPath}.txt`;
   await fs.writeFile(listFile, partAbsPaths.map((p) => `file '${p.replace(/'/g, "")}'`).join("\n"), "utf-8");
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outAbsPath],
+    const child = spawn(ffmpegBin(), ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outAbsPath],
       { stdio: ["ignore", "pipe", "pipe"] });
     child.on("error", (e) => reject(new Error(`Could not launch FFmpeg: ${e.message}`)));
     child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`Voice join failed (exit ${code}).`))));
@@ -266,11 +264,11 @@ export async function concatMp3Parts(partAbsPaths: string[], outAbsPath: string)
 /** Concatenate WAV parts (offline eSpeak chunks) into one WAV, re-encoded for safety. */
 export async function concatWavParts(partAbsPaths: string[], outAbsPath: string): Promise<void> {
   const ff = await checkFfmpeg();
-  if (!ff.ok) throw new Error("FFmpeg is required to join voice parts. Install with: winget install Gyan.FFmpeg");
+  if (!ff.ok) throw new Error("FFmpeg is required to join voice parts. " + renderUnavailableMessage());
   const listFile = `${outAbsPath}.txt`;
   await fs.writeFile(listFile, partAbsPaths.map((p) => `file '${p.replace(/'/g, "")}'`).join("\n"), "utf-8");
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", outAbsPath],
+    const child = spawn(ffmpegBin(), ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", outAbsPath],
       { stdio: ["ignore", "pipe", "pipe"] });
     child.on("error", (e) => reject(new Error(`Could not launch FFmpeg: ${e.message}`)));
     child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`Voice join failed (exit ${code}).`))));

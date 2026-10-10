@@ -3,6 +3,7 @@ import path from "path";
 import { spawn } from "child_process";
 import type { AspectRatio, ProviderInfo } from "./types";
 import { dataDir, jobsDir } from "./store";
+import { ffmpegBin } from "./tools";
 
 export const PROVIDER_META: Array<{
   id: string;
@@ -174,7 +175,7 @@ export async function indexJob(projectId: string, jobId: string): Promise<void> 
 
 export async function checkFfmpeg(): Promise<{ ok: boolean; version?: string }> {
   return new Promise((resolve) => {
-    const child = spawn("ffmpeg", ["-version"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = spawn(ffmpegBin(), ["-version"], { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
     child.stdout?.on("data", (d) => (out += String(d)));
     child.on("error", () => resolve({ ok: false }));

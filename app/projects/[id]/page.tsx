@@ -98,7 +98,7 @@ export default function Studio({ params }: { params: { id: string } }) {
   async function plan() {
     setBusy("plan"); setError(""); setNotice("");
     if (prompt.length > MAX_PROMPT) {
-      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Choto kore abar chesta korun.`);
+      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Shorten it and retry.`);
       setBusy("");
       return;
     }
@@ -238,7 +238,7 @@ export default function Studio({ params }: { params: { id: string } }) {
   const [startSec, setStartSec] = useState(0);
 
   async function importYouTube() {
-    if (!ytUrl.trim()) { setError("YouTube link din (watch / shorts / youtu.be)."); return; }
+    if (!ytUrl.trim()) { setError("Paste a YouTube link (watch / shorts / youtu.be)."); return; }
     setBusy("yt"); setError(""); setNotice("");
     try {
       const { ok, status, data } = await fetchJson(`/api/projects/${id}/source`, {
@@ -280,7 +280,7 @@ export default function Studio({ params }: { params: { id: string } }) {
         throw new Error(job.error ?? `Job ${job.status}.`);
       }
       if (Date.now() - start > timeoutMs) {
-        throw new Error("Onnekkhon lagche — page khola rakhen, abar Auto Movie chapun (jekhane thamse sekhan theke cholbe).");
+        throw new Error("Taking too long — keep this page open and press Auto Movie again (it resumes where it stopped).");
       }
       await new Promise((res) => setTimeout(res, 4000));
     }
@@ -290,7 +290,7 @@ export default function Studio({ params }: { params: { id: string } }) {
   async function autoMake() {
     if (!project) return;
     if (project.providerId !== "slideshow") {
-      if (!confirm("Ei project paid provider-e ache — clip-e taka katbe. Chaliye jaben? (Free chaile notun project Free Movie Mode-e banan.)")) return;
+      if (!confirm("This project uses a paid provider — clips will cost money. Continue? (For a free run, create a new project in Free Movie Mode.)")) return;
     }
     setBusy("auto"); setError(""); setNotice(""); setAutoLog([]);
     const log = (m: string) => setAutoLog((prev) => [...prev.slice(-9), m]);
@@ -307,7 +307,7 @@ export default function Studio({ params }: { params: { id: string } }) {
       };
       // 1. Storyboard
       if (!proj.scenes.length) {
-        log("Step 1/5: golpo sajacchi (storyboard)…");
+        log("Step 1/5: planning the storyboard…");
         const { ok, status, data } = await fetchJson(`/api/projects/${id}/plan`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, negativePrompt: negative })
@@ -315,12 +315,12 @@ export default function Studio({ params }: { params: { id: string } }) {
         if (!ok) throw new Error(apiError(status, data, "Storyboard failed."));
         proj = await refresh();
         log(`Storyboard ready: ${proj.scenes.length} scene.`);
-      } else log("Step 1/5: storyboard age thekei ready.");
+      } else log("Step 1/5: storyboard is already ready.");
       // 2. Stills
       for (const sid of proj.sceneOrder) {
         const sc = proj.scenes.find((s) => s.id === sid)!;
-        if (sc.stillPath) { log(`Scene ${sc.index + 1}: still ache, skip.`); continue; }
-        log(`Step 2/5: scene ${sc.index + 1} chobi banacchi (free, ektu time lagbe)…`);
+        if (sc.stillPath) { log(`Scene ${sc.index + 1}: image already exists, skipping.`); continue; }
+        log(`Step 2/5: generating image for scene ${sc.index + 1} (free, takes a little while)…`);
         const { ok, status, data } = await fetchJson(`/api/projects/${id}/generate`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sceneId: sid, kind: "still" })
@@ -328,14 +328,14 @@ export default function Studio({ params }: { params: { id: string } }) {
         if (!ok || !data.job) throw new Error(apiError(status, data, "Still request failed."));
         await pollJobToEnd((data.job as GenerationJob).id, 480000);
         proj = await refresh();
-        log(`Scene ${sc.index + 1}: chobi ready.`);
+        log(`Scene ${sc.index + 1}: image ready.`);
       }
       // 3. Clips
       for (const sid of proj.sceneOrder) {
         const sc = proj.scenes.find((s) => s.id === sid)!;
         const done = (proj.jobs ?? []).some((j) => j.sceneId === sid && j.status === "succeeded" && j.clipPath);
-        if (done) { log(`Scene ${sc.index + 1}: clip ache, skip.`); continue; }
-        log(`Step 3/5: scene ${sc.index + 1} video banacchi…`);
+        if (done) { log(`Scene ${sc.index + 1}: clip already exists, skipping.`); continue; }
+        log(`Step 3/5: rendering video for scene ${sc.index + 1}…`);
         const { ok, status, data } = await fetchJson(`/api/projects/${id}/generate`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sceneId: sid, kind: "video" })
@@ -347,7 +347,7 @@ export default function Studio({ params }: { params: { id: string } }) {
       }
       // 4. Voice
       if (!proj.narrationAudioPath) {
-        log("Step 4/5: voice banacchi (free)…");
+        log("Step 4/5: generating voiceover (free)…");
         const { ok, status, data } = await fetchJson(`/api/projects/${id}/narration`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tts: true, voice })
@@ -355,20 +355,20 @@ export default function Studio({ params }: { params: { id: string } }) {
         if (!ok) throw new Error(apiError(status, data, "Voiceover failed."));
         proj = await refresh();
         log("Voice ready.");
-      } else log("Step 4/5: voice age thekei ache.");
+      } else log("Step 4/5: voiceover already exists.");
       // 5. Assemble
-      log("Step 5/5: final MP4 jora lagacchi…");
+      log("Step 5/5: assembling the final MP4…");
       const { ok, status, data } = await fetchJson(`/api/projects/${id}/assemble`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ burnCaptions: proj.burnCaptions, narrationVolume: proj.narrationVolume, musicVolume: proj.musicVolume })
       }, 600000);
       if (!ok) throw new Error(apiError(status, data, "Assembly failed."));
       proj = await refresh();
-      log("Hoise! 🎬 Niche video dekhun + Download korun.");
-      setNotice("Auto Movie complete — watermark-free MP4 ready. Character/caption bodlate chaile bodle abar Render chaplei hobe.");
+      log("Done! 🎬 Watch it below + Download.");
+      setNotice("Auto Movie complete — watermark-free MP4 ready. To change characters or captions, edit them and press Render again.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Auto Movie failed.");
-      log("Thamse: " + (e instanceof Error ? e.message : "error"));
+      log("Stopped: " + (e instanceof Error ? e.message : "error"));
     } finally {
       setBusy("");
     }
@@ -454,22 +454,22 @@ export default function Studio({ params }: { params: { id: string } }) {
       <section className="card mt-5 border-purple-500/30">
         <h2 className="text-lg font-bold">YouTube / Video → Shorts (free)</h2>
         <p className="mt-1 text-xs text-muted">
-          Jekono public YouTube video ba nijer video file theke vertical 9:16 Shorts katen.
-          Shob Short scene hishebe jog hobe — preview, voice, export shob cholbe.
-          Shudhu nijer ba rights-ache emon video anben.
+          Cut vertical 9:16 Shorts from any public YouTube video or your own video file.
+          Every Short joins as a scene — preview, voice, export all work.
+          Only import videos you own or have rights to.
         </p>
         <label className="label mt-3" htmlFor="yturl">YouTube link</label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input id="yturl" className="input" placeholder="https://youtube.com/watch?v=… / shorts / youtu.be" value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} />
           <button className="btn-ghost shrink-0 text-xs" disabled={busy === "yt"} onClick={importYouTube}>
-            {busy === "yt" ? "Download hocche…" : "Import video"}
+            {busy === "yt" ? "Downloading…" : "Import video"}
           </button>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <label className="btn-ghost cursor-pointer">Nijer file upload (≤150MB)
+          <label className="btn-ghost cursor-pointer">Upload your file (≤150MB)
             <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={async (e) => {
               const f = e.target.files?.[0]; if (!f) return;
-              if (f.size > 150 * 1024 * 1024) { setError("File 150MB-er beshi — YouTube link diye anle bhalo hoy."); return; }
+              if (f.size > 150 * 1024 * 1024) { setError("File is over 150MB — importing via a YouTube link works better for big files."); return; }
               setBusy("upload"); setError("");
               try {
                 const dataUrl = await fileToDataUrl(f);
@@ -484,30 +484,30 @@ export default function Studio({ params }: { params: { id: string } }) {
               finally { setBusy(""); }
             }} />
           </label>
-          {busy === "upload" && <span className="text-muted">Upload hocche…</span>}
+          {busy === "upload" && <span className="text-muted">Uploading…</span>}
         </div>
         {project.sourceVideoPath && (
           <div className="mt-3 rounded-xl border border-slate-700 p-3">
             <p className="text-xs text-muted">Source: {Math.floor((project.sourceDurationSec ?? 0) / 60)}:{String(Math.floor((project.sourceDurationSec ?? 0) % 60)).padStart(2, "0")} min</p>
             <video controls preload="none" src={`/api/media/${project.sourceVideoPath}`} className="mt-2 w-full max-w-xl rounded-xl" />
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <label>Part (sec)
+              <label>Clip length (sec)
                 <select className="input ml-1 w-24" value={segSec} onChange={(e) => setSegSec(Number(e.target.value))}>
                   {[15, 30, 45, 60].map((v) => <option key={v} value={v}>{v}s</option>)}
                 </select>
               </label>
-              <label>Start (sec)
+              <label>Start at (sec)
                 <input type="number" min={0} className="input ml-1 w-24" value={startSec} onChange={(e) => setStartSec(Math.max(0, Number(e.target.value) || 0))} />
               </label>
               <button className="btn-primary" disabled={busy === "shorts"} onClick={cutShorts}>
-                {busy === "shorts" ? "Katchi…" : "Shorts katen (vertical 9:16)"}
+                {busy === "shorts" ? "Cutting…" : "Cut Shorts (vertical 9:16)"}
               </button>
             </div>
           </div>
         )}
         {(project.shorts ?? []).length > 0 && (
           <div className="mt-3">
-            <p className="text-xs font-semibold">Shorts ({(project.shorts ?? []).length} ta)</p>
+            <p className="text-xs font-semibold">Shorts ({(project.shorts ?? []).length})</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {(project.shorts ?? []).map((sh, i) => (
                 <div key={i} className="rounded-lg border border-slate-700 p-2">
@@ -647,7 +647,7 @@ export default function Studio({ params }: { params: { id: string } }) {
                   return (
                     <div className="mt-3 rounded-xl border border-slate-700 p-3">
                       <p className="text-xs font-semibold">
-                        Takes — shob dekhe best ta final-e din ({takes.length} ta option{takes.length > 1 ? "s" : ""})
+                        Takes — preview them all and send the best to the final video ({takes.length} option{takes.length > 1 ? "s" : ""})
                       </p>
                       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {takes.map((t, ti) => {
@@ -655,13 +655,13 @@ export default function Studio({ params }: { params: { id: string } }) {
                           return (
                             <div key={t.id} className={`rounded-lg border p-2 ${isActive ? "border-emerald-500/60" : "border-slate-700"}`}>
                               <p className="mb-1 text-[11px] font-semibold text-slate-300">
-                                Option {ti + 1}{isActive ? " ✓ (final-e jabe)" : ""}
+                                Option {ti + 1}{isActive ? " ✓ (goes to final)" : ""}
                               </p>
                               <video controls preload="none" src={`/api/media/${t.clipPath}`} className="w-full rounded-lg" />
                               <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                                 {!isActive && (
                                   <button className="btn-ghost" onClick={() => patchScene(s.id, { selectedJobId: t.id })}>
-                                    Best — final-e eta
+                                    Best — use in final
                                   </button>
                                 )}
                                 <a className="btn-ghost" href={`/api/media/${t.clipPath}`} download={`scene${s.index + 1}-option${ti + 1}.mp4`}>
@@ -672,7 +672,7 @@ export default function Studio({ params }: { params: { id: string } }) {
                           );
                         })}
                       </div>
-                      <p className="mt-1 text-[11px] text-muted">Aro option chaile “Regenerate” chapun — notun take ashbe, ager gulo thakbe.</p>
+                      <p className="mt-1 text-[11px] text-muted">Want more options? Press “Regenerate” — a new take arrives, old ones stay.</p>
                     </div>
                   );
                 })()}
@@ -738,19 +738,19 @@ export default function Studio({ params }: { params: { id: string } }) {
         {project.narrationAudioPath && <audio controls src={`/api/media/${project.narrationAudioPath}`} className="mt-3 w-full max-w-xl" />}
         <p className="mt-2 text-xs text-muted">
           Free AI voiceover uses Pollinations TTS (no key, ≈1 request / 15s). Use only licensed or your own music.
-          {project.scenes.length > 12 && ` Ei project-e ${project.scenes.length} scene — voice-e ~${Math.round(project.scenes.length * 0.35)} min lagte pare; page khola rakhen.`}
+          {project.scenes.length > 12 && ` This project has ${project.scenes.length} scenes — voiceover may take ~${Math.round(project.scenes.length * 0.35)} min. Keep this page open.`}
         </p>
       </section>
 
       {/* 5. Export */}
       <section className="card mt-5 border-blue-500/30">
-        <h2 className="text-lg font-bold">★ Auto Movie — ektai button-e full video</h2>
+        <h2 className="text-lg font-bold">★ Auto Movie — full video with one button</h2>
         <p className="mt-1 text-xs text-muted">
-          Storyboard → chobi → video clip → voice → final MP4 — shob nije nije hobe.
-          Jeta hoye geche seta skip korbe, majhkhane thamle abar chaple sekhan thekei cholbe.
+          Storyboard → images → video clips → voice → final MP4 — everything automatic.
+          Finished steps are skipped; if it stops, press again to resume from there.
         </p>
         <button className="btn-primary mt-3 w-full sm:w-auto" disabled={busy === "auto"} onClick={autoMake}>
-          {busy === "auto" ? "Movie banacchi… page bondho korben na" : "✨ Auto Movie banan"}
+          {busy === "auto" ? "Rendering your movie… don't close this page" : "✨ Make my Auto Movie"}
         </button>
         {autoLog.length > 0 && (
           <ul className="mt-3 space-y-1 rounded-xl bg-black/30 p-3 text-xs text-slate-300">

@@ -69,7 +69,7 @@ export default function Dashboard() {
       return;
     }
     if (prompt.length > MAX_PROMPT) {
-      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Choto kore abar chesta korun (mul golpo ta rekhe extra ongsho katun).`);
+      setError(`Prompt ${prompt.length} characters — limit ${MAX_PROMPT}. Shorten it and retry (keep the main story, trim the extra part).`);
       return;
     }
     // Never send a bad duration: empty/garbage → 20, out-of-range → clamp.
@@ -167,7 +167,7 @@ export default function Dashboard() {
             <label className="label" htmlFor="dur">Duration (sec, max 1800 = 30 min)</label>
             <input id="dur" type="number" min={MIN_DURATION} max={MAX_DURATION} className="input" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value))} />
             <p className="mt-1 text-[11px] text-muted">
-              ≈ {Math.max(1, Math.round((Number(durationSec) || 20) / 5))} scenes · free stills ~{Math.max(1, Math.round(Math.max(1, Math.round((Number(durationSec) || 20) / 5)) * 0.7))} min (page khola rakhen, majhe thamle resume hobe)
+              ≈ {Math.max(1, Math.round((Number(durationSec) || 20) / 5))} scenes · free stills ~{Math.max(1, Math.round(Math.max(1, Math.round((Number(durationSec) || 20) / 5)) * 0.7))} min (keep this page open; resumes anytime)
             </p>
           </div>
           <div>

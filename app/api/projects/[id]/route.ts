@@ -11,8 +11,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     return NextResponse.json(
       {
         error:
-          "Project not found. Hoy delete hoye geche, noy host kora demo link-e storage reset hoyeche " +
-          "(Vercel-e prottek request-e file muche jete pare). Permanent project-er jonno PC-te (npm run dev / start-zoro.bat) chalan."
+          "Project not found. It may have been deleted — or on a hosted demo link, storage resets between visits, " +
+          "so run on your own PC (npm run dev / start-zoro.bat) for permanent projects."
       },
       { status: 404 }
     );

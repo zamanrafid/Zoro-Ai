@@ -22,10 +22,10 @@ function dimsFor(aspect: AspectRatio): { w: number; h: number } {
 }
 
 /** Encoder recipe per quality (best = sharper, smaller CRF, slower preset). */
-export function encodeForQuality(quality: Quality): { crf: string; preset: string; sharpen: boolean } {
-  if (quality === "fast") return { crf: "23", preset: "veryfast", sharpen: false };
-  if (quality === "best") return { crf: "18", preset: "medium", sharpen: true };
-  return { crf: "20", preset: "veryfast", sharpen: false };
+export function encodeForQuality(quality: Quality): { crf: string; preset: string; sharpen: boolean; audioKbps: number } {
+  if (quality === "fast") return { crf: "23", preset: "ultrafast", sharpen: false, audioKbps: 96 };
+  if (quality === "best") return { crf: "18", preset: "medium", sharpen: true, audioKbps: 192 };
+  return { crf: "20", preset: "veryfast", sharpen: false, audioKbps: 128 };
 }
 
 export function sharpenFilter(on: boolean): string {
@@ -175,7 +175,7 @@ export async function assembleProject(
     const ai = n; // narration input index
     filterParts.push(`[${ai}:a]volume=${opts.narrationVolume ?? 1.0},aformat=sample_fmts=fltp:channel_layouts=stereo[na]`);
     filterParts.push(`[vcat]null[vout]`);
-    mapArgs = ["-map", "[vout]", "-map", "[na]", "-c:a", "aac", "-shortest"];
+    mapArgs = ["-map", "[vout]", "-map", "[na]", "-c:a", "aac", "-b:a", `${enc.audioKbps}k`, "-shortest"];
   } else {
     filterParts.push(`[vcat]null[vout]`);
     mapArgs = ["-map", "[vout]"];

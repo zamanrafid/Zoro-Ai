@@ -71,7 +71,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const probe = await probeVideo(path.join(dataDir(), rel));
       if (probe.durationSec > 1800) {
         await fs.unlink(path.join(dataDir(), rel)).catch(() => undefined);
-        return NextResponse.json({ error: "Video is longer than 30 minutes — use a shorter one." }, { status: 400 });
+        return NextResponse.json({ error: "Video is longer than 20 minutes — use a shorter one." }, { status: 400 });
       }
       p.sourceVideoPath = rel;
       p.sourceDurationSec = Math.round(probe.durationSec * 10) / 10;
@@ -181,7 +181,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         : { ok: false, help: "Install free with: winget install yt-dlp.yt-dlp" },
       ffmpeg: ff.ok ? { ok: true } : { ok: false, help: "Install free with: winget install Gyan.FFmpeg" }
     },
-    limits: { maxBytes: MAX_SOURCE_BYTES, maxSec: 1800, segMin: 5, segMax: 60 },
+    limits: { maxBytes: MAX_SOURCE_BYTES, maxSec: 1200, segMin: 5, segMax: 60 },
     rights: "Only import videos you own or have rights to use."
   });
 }

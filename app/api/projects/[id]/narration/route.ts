@@ -83,11 +83,39 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     try {
       const dir = path.join(dataDir(), "media", p.id, "audio");
       await fs.mkdir(dir, { recursive: true });
-      const parts: string[] = [];
-      const ext = engine === "offline" ? "wav" : "mp3";
+      // Flatten every chunk first so engines can run them in parallel.
+      const tasks: string[] = [];
       for (const u of usable) {
-        for (const chunk of chunkText(u.text, engine === "hosted" ? 700 : 1200)) {
-          const partAbs = path.join(dir, `tts_${Date.now()}_${parts.length}.${ext}`);
+        for (const chunk of chunkText(u.text, engine === "hosted" ? 700 : 1200)) tasks.push(chunk);
+      }
+      const runStamp = Date.now();
+      const ext = engine === "offline" ? "wav" : "mp3";
+      const partFor = (i: number, e = ext) => path.join(dir, `tts_${runStamp}_${i}.${e}`);
+      const parts: string[] = new Array(tasks.length);
+
+      if (engine === "edge") {
+        // Network-bound: 3 concurrent syntheses ≈ 3x faster voiceover.
+        const CONC = 3;
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < tasks.length) {
+            const i = cursor++;
+            try {
+              await edgeTtsMp3(tasks[i], voice, partFor(i));
+              parts[i] = partFor(i);
+            } catch {
+              // Natural voice failed for this chunk → robot fallback, keep going.
+              const wav = partFor(i, "wav");
+              await espeakToWav(tasks[i], wav);
+              parts[i] = wav;
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(CONC, tasks.length) }, () => worker()));
+      } else {
+        for (let i = 0; i < tasks.length; i++) {
+          const chunk = tasks[i];
+          const partAbs = partFor(i);
           if (engine === "hosted") {
             // Pace free-tier requests (≈1 / 15s anonymous).
             for (let tries = 0; tries < 40; tries++) {
@@ -100,19 +128,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             const buf = await fetchTtsMp3(chunk, voice);
             await fs.writeFile(partAbs, buf);
             await fs.writeFile(path.join(dataDir(), "free-lock.json"), JSON.stringify({ at: Date.now() }), "utf-8");
-          } else if (engine === "edge") {
-            try {
-              await edgeTtsMp3(chunk, voice, partAbs);
-            } catch {
-              // Natural voice failed mid-run → finish this chunk with the robot, keep going.
-              await espeakToWav(chunk, partAbs.replace(/\.mp3$/, ".wav"));
-              parts.push(partAbs.replace(/\.mp3$/, ".wav"));
-              continue;
-            }
           } else {
             await espeakToWav(chunk, partAbs);
           }
-          parts.push(partAbs);
+          parts[i] = partAbs;
         }
       }
       const outAbs = path.join(dir, `voiceover_${Date.now()}.${ext}`);

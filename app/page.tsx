@@ -12,7 +12,7 @@ interface Vid { id: string; name: string; updatedAt: string; hasOutput: boolean 
 type Phase = "idle" | "working" | "done";
 type StepState = "todo" | "doing" | "done" | "failed";
 
-const QUICK_DURATIONS = [10, 20, 30, 60];
+const QUICK_DURATIONS = [10, 20, 30, 60, 300, 600, 1200];
 const STYLES = ["cinematic-documentary", "realistic", "historical", "dark-mystery", "fantasy", "animation"];
 
 export default function Home() {
@@ -66,7 +66,7 @@ export default function Home() {
       if (job.status === "succeeded") return job;
       if (job.status === "failed" || job.status === "cancelled") throw new Error(job.error ?? `Job ${job.status}.`);
       if (Date.now() - start > timeoutMs) throw new Error("Taking too long — press Make Video again to resume from here.");
-      await new Promise((res) => setTimeout(res, 4000));
+      await new Promise((res) => setTimeout(res, 2500));
     }
   }
 
@@ -279,7 +279,7 @@ export default function Home() {
                   <option value="1:1">1:1 Square</option>
                 </select>
                 <select className="input w-auto" value={duration} onChange={(e) => setDuration(Number(e.target.value))} aria-label="Length">
-                  {QUICK_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}
+                  {QUICK_DURATIONS.map((d) => <option key={d} value={d}>{d >= 60 ? `${d / 60}min` : `${d}s`}</option>)}
                 </select>
                 <select className="input w-auto" value={quality} onChange={(e) => setQuality(e.target.value as typeof quality)} aria-label="Quality">
                   <option value="fast">Fast 720p</option>

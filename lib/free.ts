@@ -112,7 +112,7 @@ export function isRetriableFreeError(msg: string): boolean {
 /** Free LLM call for storyboard planning. Returns parsed JSON or throws (caller falls back to offline). */
 export async function fetchFreePlannerJson(system: string, user: string): Promise<Record<string, unknown>> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 45000);
+  const t = setTimeout(() => ctrl.abort(), 20000);
   try {
     const res = await fetch("https://text.pollinations.ai/openai", {
       method: "POST",

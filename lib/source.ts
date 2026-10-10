@@ -5,7 +5,7 @@ import { dataDir } from "./store";
 import { ffmpegBin, ffprobeBin, ytdlpBin } from "./tools";
 
 export const MAX_SOURCE_BYTES = 500 * 1024 * 1024;
-export const MAX_SOURCE_SEC = 1800; // 30 min cap like generated videos
+export const MAX_SOURCE_SEC = 1200; // 20 min cap like generated videos
 
 const YT_PATTERNS = [
   /^(https?:\/\/)?(www\.|m\.)?youtube\.com\/watch\?[^#\s]*v=[\w-]{6,}.*$/,
@@ -77,7 +77,7 @@ export async function downloadYouTube(url: string, outAbsPath: string, timeoutMs
       [
         "--no-playlist",
         "--max-filesize", "500M",
-        "--match-filter", "duration < 1800",
+        "--match-filter", "duration < 1200",
         "-f", "bv*[height<=720]+ba/b[height<=720]/b",
         "--merge-output-format", "mp4",
         "-o", outAbsPath,
@@ -108,7 +108,7 @@ export async function downloadYouTube(url: string, outAbsPath: string, timeoutMs
   const probe = await probeVideo(outAbsPath);
   if (probe.durationSec > MAX_SOURCE_SEC) {
     await fs.unlink(outAbsPath).catch(() => undefined);
-    throw new Error("Video is longer than 30 minutes — import a shorter one.");
+    throw new Error("Video is longer than 20 minutes — import a shorter one.");
   }
 }
 

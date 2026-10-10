@@ -345,7 +345,7 @@ export default function Studio({ params }: { params: { id: string } }) {
       if (Date.now() - start > timeoutMs) {
         throw new Error("Taking too long — keep this page open and press Auto Movie again (it resumes where it stopped).");
       }
-      await new Promise((res) => setTimeout(res, 4000));
+      await new Promise((res) => setTimeout(res, 2500));
     }
   }
 

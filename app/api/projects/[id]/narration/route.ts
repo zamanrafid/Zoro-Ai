@@ -6,6 +6,7 @@ import path from "path";
 import { dataDir, getProject, saveProject, saveUpload } from "@/lib/store";
 import { buildSrt, concatMp3Parts, concatWavParts } from "@/lib/ffmpeg";
 import { FREE_VOICES, checkEspeak, chunkText, espeakToWav, fetchTtsMp3, freeTierNote } from "@/lib/free";
+import { MAX_SCRIPT } from "@/lib/validate";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Body must be JSON." }, { status: 400 }); }
 
   if (typeof body.narrationScript === "string") {
-    if (body.narrationScript.length > 20000) return NextResponse.json({ error: "Narration too long." }, { status: 400 });
+    if (body.narrationScript.length > MAX_SCRIPT) return NextResponse.json({ error: "Narration too long." }, { status: 400 });
     p.narrationScript = body.narrationScript;
     const lines = body.narrationScript.split("\n").filter(Boolean);
     if (lines.length === p.scenes.length) {

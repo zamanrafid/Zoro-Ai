@@ -119,6 +119,12 @@ export interface Project {
   musicVolume: number;
   burnCaptions: boolean;
   output: AssembleOutput;
+  /** Imported source video (YouTube / upload) for Shorts cutting. */
+  sourceVideoPath?: string;
+  sourceDurationSec?: number;
+  sourceTitle?: string;
+  /** Vertical Shorts cut from the source: { path, startSec, lenSec }. */
+  shorts: Array<{ path: string; startSec: number; lenSec: number }>;
   createdAt: string;
   updatedAt: string;
 }

@@ -60,6 +60,7 @@ export async function POST(req: Request) {
     musicVolume: 0.4,
     burnCaptions: false,
     output: { status: "idle", updatedAt: now },
+    shorts: [],
     createdAt: now,
     updatedAt: now
   };

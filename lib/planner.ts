@@ -329,7 +329,7 @@ function boardFromLlmJson(
   return {
     title: String(parsed.title ?? offline.title).slice(0, 120),
     summary: String(parsed.summary ?? offline.summary).slice(0, 2000),
-    narrationScript: String(parsed.narrationScript ?? offline.narrationScript).slice(0, 20000),
+    narrationScript: String(parsed.narrationScript ?? offline.narrationScript).slice(0, 200000),
     characters: characters.length ? characters : offline.characters,
     scenes,
     negativePrompt: offline.negativePrompt

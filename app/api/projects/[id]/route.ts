@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getProject, saveProject, deleteProjectFiles, newId } from "@/lib/store";
-import { MAX_PROMPT, MAX_DURATION, MIN_DURATION } from "@/lib/validate";
+import { MAX_PROMPT, MAX_DURATION, MIN_DURATION, MAX_SCRIPT } from "@/lib/validate";
 import { z } from "zod";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -36,7 +36,7 @@ const patchSchema = z.object({
       negativePrompt: z.string().max(1000).optional()
     })
     .optional(),
-  narrationScript: z.string().max(20000).optional(),
+  narrationScript: z.string().max(MAX_SCRIPT).optional(),
   sceneOrder: z.array(z.string()).optional(),
   narrationVolume: z.number().min(0).max(2).optional(),
   musicVolume: z.number().min(0).max(2).optional(),
@@ -81,7 +81,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (v.providerId !== undefined) p.providerId = v.providerId;
   if (v.settings !== undefined) p.settings = { ...p.settings, ...v.settings };
   if (v.narrationScript !== undefined) {
-    if (v.narrationScript.length > 20000) return NextResponse.json({ error: "Narration too long." }, { status: 400 });
+    if (v.narrationScript.length > MAX_SCRIPT) return NextResponse.json({ error: "Narration too long." }, { status: 400 });
     p.narrationScript = v.narrationScript;
     // Keep per-scene segments in sync when line counts match
     const lines = v.narrationScript.split("\n").filter(Boolean);

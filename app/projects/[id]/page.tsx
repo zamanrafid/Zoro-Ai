@@ -233,6 +233,38 @@ export default function Studio({ params }: { params: { id: string } }) {
 
   const [voice, setVoice] = useState("nova");
   const [autoLog, setAutoLog] = useState<string[]>([]);
+  const [ytUrl, setYtUrl] = useState("");
+  const [segSec, setSegSec] = useState(30);
+  const [startSec, setStartSec] = useState(0);
+
+  async function importYouTube() {
+    if (!ytUrl.trim()) { setError("YouTube link din (watch / shorts / youtu.be)."); return; }
+    setBusy("yt"); setError(""); setNotice("");
+    try {
+      const { ok, status, data } = await fetchJson(`/api/projects/${id}/source`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl: ytUrl.trim() })
+      }, 600000);
+      if (!ok || !data.project) throw new Error(apiError(status, data, "YouTube import failed."));
+      setProject(data.project as Project);
+      setNotice((data.note as string) ?? "Video imported.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Import failed."); }
+    finally { setBusy(""); }
+  }
+
+  async function cutShorts() {
+    setBusy("shorts"); setError(""); setNotice("");
+    try {
+      const { ok, status, data } = await fetchJson(`/api/projects/${id}/source`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "shorts", segSec, startSec })
+      }, 600000);
+      if (!ok || !data.project) throw new Error(apiError(status, data, "Cutting failed."));
+      setProject(data.project as Project);
+      setNotice((data.note as string) ?? "Shorts ready.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Cutting failed."); }
+    finally { setBusy(""); }
+  }
 
   /** Wait for one job to finish (throws on failure/timeout). Resume-safe: rerun continues. */
   async function pollJobToEnd(jobId: string, timeoutMs: number): Promise<GenerationJob> {
@@ -414,6 +446,77 @@ export default function Studio({ params }: { params: { id: string } }) {
           <div className="mt-4 break-words rounded-xl bg-black/30 p-4 text-sm">
             <p className="font-semibold">{project.title}</p>
             <p className="mt-1 text-slate-300">{project.summary}</p>
+          </div>
+        )}
+      </section>
+
+      {/* 1b. YouTube / video → Shorts */}
+      <section className="card mt-5 border-purple-500/30">
+        <h2 className="text-lg font-bold">YouTube / Video → Shorts (free)</h2>
+        <p className="mt-1 text-xs text-muted">
+          Jekono public YouTube video ba nijer video file theke vertical 9:16 Shorts katen.
+          Shob Short scene hishebe jog hobe — preview, voice, export shob cholbe.
+          Shudhu nijer ba rights-ache emon video anben.
+        </p>
+        <label className="label mt-3" htmlFor="yturl">YouTube link</label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input id="yturl" className="input" placeholder="https://youtube.com/watch?v=… / shorts / youtu.be" value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} />
+          <button className="btn-ghost shrink-0 text-xs" disabled={busy === "yt"} onClick={importYouTube}>
+            {busy === "yt" ? "Download hocche…" : "Import video"}
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label className="btn-ghost cursor-pointer">Nijer file upload (≤150MB)
+            <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={async (e) => {
+              const f = e.target.files?.[0]; if (!f) return;
+              if (f.size > 150 * 1024 * 1024) { setError("File 150MB-er beshi — YouTube link diye anle bhalo hoy."); return; }
+              setBusy("upload"); setError("");
+              try {
+                const dataUrl = await fileToDataUrl(f);
+                const { ok, status, data } = await fetchJson(`/api/projects/${id}/source`, {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ upload: { filename: f.name, dataUrl } })
+                }, 600000);
+                if (!ok || !data.project) throw new Error(apiError(status, data, "Upload failed."));
+                setProject(data.project as Project);
+                setNotice((data.note as string) ?? "Uploaded.");
+              } catch (err) { setError(err instanceof Error ? err.message : "Upload failed."); }
+              finally { setBusy(""); }
+            }} />
+          </label>
+          {busy === "upload" && <span className="text-muted">Upload hocche…</span>}
+        </div>
+        {project.sourceVideoPath && (
+          <div className="mt-3 rounded-xl border border-slate-700 p-3">
+            <p className="text-xs text-muted">Source: {Math.floor((project.sourceDurationSec ?? 0) / 60)}:{String(Math.floor((project.sourceDurationSec ?? 0) % 60)).padStart(2, "0")} min</p>
+            <video controls preload="none" src={`/api/media/${project.sourceVideoPath}`} className="mt-2 w-full max-w-xl rounded-xl" />
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <label>Part (sec)
+                <select className="input ml-1 w-24" value={segSec} onChange={(e) => setSegSec(Number(e.target.value))}>
+                  {[15, 30, 45, 60].map((v) => <option key={v} value={v}>{v}s</option>)}
+                </select>
+              </label>
+              <label>Start (sec)
+                <input type="number" min={0} className="input ml-1 w-24" value={startSec} onChange={(e) => setStartSec(Math.max(0, Number(e.target.value) || 0))} />
+              </label>
+              <button className="btn-primary" disabled={busy === "shorts"} onClick={cutShorts}>
+                {busy === "shorts" ? "Katchi…" : "Shorts katen (vertical 9:16)"}
+              </button>
+            </div>
+          </div>
+        )}
+        {(project.shorts ?? []).length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold">Shorts ({(project.shorts ?? []).length} ta)</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {(project.shorts ?? []).map((sh, i) => (
+                <div key={i} className="rounded-lg border border-slate-700 p-2">
+                  <p className="mb-1 text-[11px] text-slate-300">Short {i + 1} · {sh.lenSec}s</p>
+                  <video controls preload="none" src={`/api/media/${sh.path}`} className="w-full rounded-lg" />
+                  <a className="btn-ghost mt-1 inline-block text-[11px]" href={`/api/media/${sh.path}`} download={`short-${i + 1}.mp4`}>Download</a>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>

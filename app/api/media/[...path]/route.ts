@@ -8,6 +8,8 @@ import { dataDir } from "@/lib/store";
 const MIME: Record<string, string> = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".ogg": "audio/ogg",
